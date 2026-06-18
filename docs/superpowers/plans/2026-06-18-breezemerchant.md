@@ -1,85 +1,79 @@
-# breezemerchant Implementation Plan
+# Product Builder Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 ## Handoff note (read this first)
 
-You're picking this up cold — the design conversation lived in another session, so the
-"why" is in the spec, not in your head. Skim the companion docs before starting:
-
+You're picking this up cold. Read these before starting:
 - **Spec (the why):** [`docs/superpowers/specs/2026-06-18-breezemerchant-design.md`](../specs/2026-06-18-breezemerchant-design.md)
-- **The authored POV framework (the product's brain):** [`docs/pov/pm-role-shift-framework.md`](../../pov/pm-role-shift-framework.md)
+- **The authored frameworks (the brain):** [`docs/pov/pm-role-shift-framework.md`](../../pov/pm-role-shift-framework.md)
+- **The canonical prototype:** [`prototype/product-builder.html`](../../../prototype/product-builder.html) — a working single-file React app. It is the **source of truth for the domain data (builder model, Valtech excerpt, triggers, scenarios) and the UI markup/logic.** This plan ports that into a real Next.js app and adds the server-side generation the prototype fakes.
 
-**Recommended approach:** kick this off with `superpowers:subagent-driven-development`
-(fresh subagent per task + a review checkpoint after each one). It catches any
-misread of the spec at the task it happens rather than letting it compound — which
-matters most when you didn't write the plan.
+**Recommended approach:** `superpowers:subagent-driven-development` (fresh subagent per task + review checkpoint after each).
 
-**Prerequisite — API key:** Tasks 1–7 build and unit-test with **no** API key.
-Only the live Claude call (`lib/analyze.ts`) and the Task 8 golden-path demo need a
-real `ANTHROPIC_API_KEY` in `.env.local` (copy `.env.local.example`). Don't get
-blocked at the finish line — have a key ready before Task 8.
+**Prerequisite — API key:** Tasks 1–7 build and unit-test with **no** API key. Only the live generation route (`lib/generate.ts`) and the Task 8 golden-path demo need a real `ANTHROPIC_API_KEY` in `.env.local`. The deterministic fallback means the app fully works without a key — the key only upgrades the canned frame to a generated one.
 
-**Goal:** A Valtech-internal web app where a PM enters a live client-context URL plus engagement type and project phase, and gets a structured briefing — grounded in an authored PM role-shift framework — on where to focus their mindset and skills to show up as a Product Builder at that client.
+**Goal:** An in-the-flow companion where a Valtech PM picks a work moment and gets two grounded options — the traditional Valtech move at their level vs the AI-native Product Builder move — with a client-value verdict, a copyable prompt, skill progression, training scenarios, and move history.
 
-**Architecture:** Single Next.js (App Router) app. One client form posts to one API route. The route fetches the URL server-side, extracts readable text, then makes one structured Claude call that maps the real signals onto the authored POV framework (loaded from a markdown file at request time). The validated JSON briefing renders into a focused, sectioned view. No chat; structured in, structured out.
+**Architecture:** Single Next.js app. Domain data + logic live in `lib/` (pure, tested). One server-side API route generates the two-option frame with structured output, grounded in both frameworks, with a per-trigger deterministic fallback. The UI is ported from the prototype: an in-memory indicative user, the Trigger→Frame→Move→Track loop, Skills and History views.
 
-**Tech Stack:** Next.js 14 (App Router, TypeScript), `@anthropic-ai/sdk`, `@mozilla/readability` + `jsdom` for extraction, `zod` for the briefing schema, `vitest` for tests.
+**Tech Stack:** Next.js 14 (App Router, TypeScript), React, `@anthropic-ai/sdk`, `zod`, `vitest`. Styling: `valtech.css` + `breezemerchant.css`.
 
 ## Global Constraints
 
-- **Model:** `claude-opus-4-8` (exact string; never append a date suffix).
-- **Thinking:** adaptive only — `thinking: {type: "adaptive"}`. Never use `budget_tokens` (400 on Opus 4.8).
-- **No assistant prefills** (400 on Opus 4.8). Use structured outputs to shape the response.
-- **API key** must stay server-side. Read from `process.env.ANTHROPIC_API_KEY`; never expose to the client bundle.
-- **Engagement types** (exact option values): `greenfield` ("Greenfield build"), `modernization` ("Legacy modernization"), `advisory` ("Advisory").
-- **Project phases** (exact option values): `discovery` ("Discovery"), `delivery` ("Delivery"), `scaling` ("Scaling").
-- **Client posture** (exact option values): `conservative` ("Conservative"), `pragmatic` ("Pragmatic"), `forward` ("Forward-thinking"). Strategic dial — how hard to push the builder/AI-PM agenda.
-- **Competency themes** (the four Valtech themes, exact keys): `vision` ("Vision & strategy"), `discovery` ("Discovery"), `execution` ("Execution"), `consulting` ("Consulting").
-- **Competency levels** (exact option values, per theme): `developing` ("Developing"), `proficient` ("Proficient"), `advanced` ("Advanced"). Developmental dial — how much to stretch the PM.
-- **POV framework file:** `docs/pov/pm-role-shift-framework.md` (already exists). Loaded at request time; editing it changes behavior with no code change.
-- **The briefing surfaces only the 2–3 most relevant shift dimensions** for the chosen engagement + phase — focus over completeness.
-- **Each dimension anchors to exactly one competency theme** (`vision` | `discovery` | `execution` | `consulting`); its skill move is tuned to the PM's rating on that theme.
-- Each recommended move has two parts: a **mindset shift** and a **concrete skill**.
-- **Consulting is cross-cutting:** when the PM's `consulting` rating is `advanced`, every move gains a coaching layer ("coach the client team"); when `developing`, it flips to "do it yourself first."
-- **Styling:** load `valtech.css` (repo root — design tokens + embedded fonts, untouched) then `breezemerchant.css` (app component layer, built only from `--vt-*` tokens). Light "paper" theme, coral accent. No hardcoded colours in app styles.
+- **Model:** `claude-opus-4-8` (exact string; never a date suffix). Thinking: adaptive only (`thinking: {type: "adaptive"}`); never `budget_tokens`. No assistant prefills.
+- **API key server-side only** (`process.env.ANTHROPIC_API_KEY`); never in the client bundle. Generation runs in an API route, not the browser.
+- **A live demo must never break** — every trigger has deterministic fallback content; the route returns it whenever generation fails or no key is set.
+- **Triggers** (exact ids): `brief`, `discovery`, `aifeature`, `stuck`, `update`. Each maps to one Valtech competency (`trad`) and one builder competency id (`build`).
+- **Client appetite** (exact values): `conservative`, `pragmatic`, `ambitious`. Drives the client-value verdict.
+- **Delivery phase** (exact values): `discovery`, `definition`, `delivery`.
+- **Builder model:** competencies `1–9`; Tier 1 = `{1,2,3}` (Foundations, established, not collectible); collectible = `[4,5,6,7,8,9]`. Levels: `Aware, Practising, Proficient, Leading`, advancing every `REPS_PER_LEVEL = 3`.
+- **Framework level:** integer `1–5`; set via the header dropdown; selects the Valtech level statement and conditions generation.
+- **Verdict:** `do-it` | `skip-it`; `skip-it` only when the AI-native move wouldn't serve the client given appetite + phase, and must carry the honest alternative.
+- **Training reps are tagged distinctly** from real client reps in history.
+- **Navigation:** the "Product Builder" wordmark is home; the only other destinations are Skills and History. No "Work" tab.
+- **Styling:** load `valtech.css` (untouched base) then `breezemerchant.css`; no hardcoded colours in app styles.
+- **Port data and UI verbatim from `prototype/product-builder.html`** wherever this plan says "port from the prototype" — do not re-invent content.
 
 ---
 
-### Task 1: Scaffold the Next.js app
+## File Structure
 
-**Files:**
-- Create: `package.json`, `tsconfig.json`, `next.config.mjs`, `vitest.config.ts`, `.env.local.example`, `.gitignore`
-- Create: `app/layout.tsx`, `app/page.tsx` (placeholder), `app/globals.css`
+- `lib/builder.ts` — Product Builder model (9 competencies, tiers, tells), `TIER_NAME`, `COLLECTIBLE`, `builderId`.
+- `lib/valtech.ts` — Valtech competency excerpt: name → `{ theme, levels[5] }`.
+- `lib/triggers.ts` — `TRIGGERS` (id, title, sub, `trad`, `build`, fallback content, `scenario`), `triggerById`, `builderToTrigger`, `APPETITE`.
+- `lib/skills.ts` — `REPS_PER_LEVEL`, `LEVEL_NAME`, `skillLevel`, `skillProgress`, `skillLabel`, `recommendSkill`.
+- `lib/schema.ts` — zod `FrameSchema` (the generated two-option output) + `GenerateInputSchema` + types.
+- `lib/generate.ts` — `buildPrompt`, `fallbackFrame`, `generateFrame` (server-side Claude call).
+- `lib/user.ts` — `NOMI_SEED` + `User` / `Activity` types.
+- `app/api/frame/route.ts` — `POST` → frame JSON (generated or fallback).
+- `app/styles/valtech.css`, `app/styles/breezemerchant.css` — copied from repo root.
+- `app/layout.tsx`, `app/page.tsx` + `app/components/*` — UI ported from the prototype.
 
-**Interfaces:**
-- Produces: a runnable Next.js dev server (`npm run dev`) and a working test runner (`npm test`).
+---
 
-- [ ] **Step 1: Create `package.json`**
+### Task 1: Scaffold the Next.js app + Valtech styling
+
+**Files:** `package.json`, `tsconfig.json`, `next.config.mjs`, `vitest.config.ts`, `.env.local.example`, `.gitignore`, `app/layout.tsx`, `app/page.tsx` (placeholder), `app/styles/*`.
+
+**Interfaces:** Produces a runnable dev server (`npm run dev`) and test runner (`npm test`), with the Valtech stylesheets loaded.
+
+- [ ] **Step 1: `package.json`**
 
 ```json
 {
-  "name": "breezemerchant",
+  "name": "product-builder",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
+  "scripts": { "dev": "next dev", "build": "next build", "start": "next start", "test": "vitest run" },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
-    "@mozilla/readability": "^0.5.0",
-    "jsdom": "^25.0.0",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/jsdom": "^21.1.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.0",
     "typescript": "^5.5.0",
@@ -88,1191 +82,459 @@ blocked at the finish line — have a key ready before Task 8.
 }
 ```
 
-- [ ] **Step 2: Create `tsconfig.json`**
+- [ ] **Step 2: `tsconfig.json`** — standard Next.js App Router config with `"paths": { "@/*": ["./*"] }`, `strict: true`, `jsx: "preserve"`, `moduleResolution: "bundler"`.
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "ES2022"],
-    "allowJs": false,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [{ "name": "next" }],
-    "paths": { "@/*": ["./*"] }
-  },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
-}
-```
+- [ ] **Step 3: `next.config.mjs`** — `export default {};`
 
-- [ ] **Step 3: Create `next.config.mjs`**
-
-```js
-/** @type {import('next').NextConfig} */
-const nextConfig = {};
-export default nextConfig;
-```
-
-- [ ] **Step 4: Create `vitest.config.ts`**
+- [ ] **Step 4: `vitest.config.ts`**
 
 ```ts
 import { defineConfig } from "vitest/config";
-
-export default defineConfig({
-  test: {
-    environment: "node",
-    include: ["lib/**/*.test.ts"],
-  },
-});
+export default defineConfig({ test: { environment: "node", include: ["lib/**/*.test.ts"] } });
 ```
 
-- [ ] **Step 5: Create `.env.local.example`**
+- [ ] **Step 5: `.env.local.example`** → `ANTHROPIC_API_KEY=sk-ant-your-key-here`
 
-```
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-```
+- [ ] **Step 6: `.gitignore`** → `node_modules/`, `.next/`, `.env.local`, `next-env.d.ts`, `*.tsbuildinfo`
 
-- [ ] **Step 6: Create `.gitignore`**
-
-```
-node_modules/
-.next/
-.env.local
-*.tsbuildinfo
-next-env.d.ts
-```
-
-- [ ] **Step 7: Bring the Valtech stylesheets into the app**
-
-`valtech.css` and `breezemerchant.css` already live at the repo root. Copy them into the app's
-styles folder so Next.js can import them (Next global CSS must be imported from within the app):
+- [ ] **Step 7: Bring in the Valtech stylesheets**
 
 Run: `mkdir -p app/styles && cp valtech.css breezemerchant.css app/styles/`
-Expected: both files present in `app/styles/`.
+Expected: both files in `app/styles/`. (Untouched base + app layer; no separate theme file.)
 
-(`valtech.css` is the untouched design-system base — tokens + embedded fonts. `breezemerchant.css`
-is the app layer built from `--vt-*` tokens. Do not add a separate theme file; these two are the styling.)
-
-- [ ] **Step 8: Create `app/layout.tsx`**
+- [ ] **Step 8: `app/layout.tsx`** — import the two stylesheets, set metadata.
 
 ```tsx
 import "./styles/valtech.css";
 import "./styles/breezemerchant.css";
 import type { ReactNode } from "react";
-
-export const metadata = {
-  title: "breezemerchant",
-  description: "Cut the hype. Show up as a Product Builder.",
-};
-
+export const metadata = { title: "Product Builder", description: "AI-native moves for Valtech PMs." };
 export default function RootLayout({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
+  return (<html lang="en"><body>{children}</body></html>);
 }
 ```
 
-- [ ] **Step 9: Create placeholder `app/page.tsx`**
+- [ ] **Step 9: placeholder `app/page.tsx`** → `export default function Page(){ return <main style={{padding:32}}>Product Builder</main>; }`
 
-```tsx
-export default function Page() {
-  return <main style={{ padding: 32 }}>breezemerchant</main>;
-}
-```
+- [ ] **Step 10: Install and build** — `npm install && npm run build` → succeeds, no type errors.
 
-- [ ] **Step 10: Install and verify the dev server boots**
-
-Run: `npm install && npm run build`
-Expected: build completes with no type errors; `.next/` produced.
-
-- [ ] **Step 11: Commit**
-
-```bash
-git add package.json tsconfig.json next.config.mjs vitest.config.ts .env.local.example .gitignore app/
-git commit -m "chore: scaffold Next.js app"
-```
+- [ ] **Step 11: Commit** — `git add … && git commit -m "chore: scaffold Next.js app with Valtech styling"`
 
 ---
 
-### Task 2: Briefing schema and shared types
+### Task 2: Domain data modules
 
-**Files:**
-- Create: `lib/schema.ts`
-- Test: `lib/schema.test.ts`
+**Files:** Create `lib/builder.ts`, `lib/valtech.ts`, `lib/triggers.ts`. Test: `lib/data.test.ts`.
 
 **Interfaces:**
-- Produces:
-  - `ENGAGEMENT_TYPES`, `PHASES`, `POSTURES`, `COMPETENCY_LEVELS`, `COMPETENCY_THEMES`: each `readonly {value: string; label: string}[]`
-  - `BriefingSchema` (zod) and `type Briefing = z.infer<typeof BriefingSchema>` — dimensions carry `anchorTheme`, `howToPlay`, and a nullable `coachingNote`
-  - `AnalyzeInputSchema` (zod) with fields `{ text, engagement, phase, posture, competency }` where `competency` is `{ vision, discovery, execution, consulting }` of level values; and `type AnalyzeInput`
+- Produces `BUILDER` (`Record<number, {tier:1|2|3; short:string; line:string; tell:string}>`), `TIER_NAME`, `COLLECTIBLE = [4,5,6,7,8,9]`, `builderId(label): number`.
+- `VALTECH` (`Record<string, {theme:string; levels:[string,string,string,string,string]}>`).
+- `TRIGGERS` (array; each `{id,title,sub,trad,build,gloss,builder,why,steps,prompt,timebox,skip,scenario,scenAppetite,scenPhase}`), `triggerById`, `builderToTrigger`, `APPETITE`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing integrity test**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import {
-  BriefingSchema,
-  AnalyzeInputSchema,
-  ENGAGEMENT_TYPES,
-  PHASES,
-  POSTURES,
-  COMPETENCY_LEVELS,
-  COMPETENCY_THEMES,
-} from "./schema";
+import { BUILDER, COLLECTIBLE, builderId } from "./builder";
+import { VALTECH } from "./valtech";
+import { TRIGGERS, triggerById, builderToTrigger } from "./triggers";
 
-const validCompetency = {
-  vision: "proficient",
-  discovery: "developing",
-  execution: "advanced",
-  consulting: "proficient",
-};
-
-describe("schema", () => {
-  it("exposes the fixed option lists", () => {
-    expect(ENGAGEMENT_TYPES.map((o) => o.value)).toEqual(["greenfield", "modernization", "advisory"]);
-    expect(PHASES.map((o) => o.value)).toEqual(["discovery", "delivery", "scaling"]);
-    expect(POSTURES.map((o) => o.value)).toEqual(["conservative", "pragmatic", "forward"]);
-    expect(COMPETENCY_LEVELS.map((o) => o.value)).toEqual(["developing", "proficient", "advanced"]);
-    expect(COMPETENCY_THEMES.map((o) => o.value)).toEqual(["vision", "discovery", "execution", "consulting"]);
+describe("domain data integrity", () => {
+  it("has 9 builder competencies with tier and tell, collectible = tiers 2-3", () => {
+    expect(Object.keys(BUILDER)).toHaveLength(9);
+    for (const v of Object.values(BUILDER)) {
+      expect([1, 2, 3]).toContain(v.tier);
+      expect(v.tell.length).toBeGreaterThan(0);
+    }
+    expect(COLLECTIBLE).toEqual([4, 5, 6, 7, 8, 9]);
+    expect(COLLECTIBLE.every((id) => BUILDER[id].tier !== 1)).toBe(true);
   });
 
-  it("validates a well-formed briefing", () => {
-    const briefing = {
-      clientName: "Acme",
-      oneLineRead: "Real delivery maturity, discovery is hype.",
-      dimensions: [
-        {
-          name: "Discovery → Sensing",
-          anchorTheme: "discovery",
-          signal: "They mention weekly user interviews.",
-          hypeToDiscount: "Generic 'data-driven' claims.",
-          howToPlay: "Anchor the AI assist to a number they trust.",
-          baselineCompetency: "Using qualitative data",
-          mindsetMove: "Treat discovery as continuous.",
-          skillMove: "Set up an AI-assisted signal digest.",
-          coachingNote: "Hand the digest method to their team to own.",
-        },
-      ],
-      breezemerchantRead: "Mostly real; watch the discovery theatre.",
-    };
-    expect(() => BriefingSchema.parse(briefing)).not.toThrow();
+  it("every Valtech competency has a theme and exactly 5 levels", () => {
+    for (const v of Object.values(VALTECH)) {
+      expect(v.levels).toHaveLength(5);
+      expect(v.theme.length).toBeGreaterThan(0);
+    }
   });
 
-  it("allows a null coachingNote and rejects an unknown anchorTheme", () => {
-    const base = {
-      name: "Spec → Build",
-      anchorTheme: "execution",
-      signal: "s",
-      hypeToDiscount: "h",
-      howToPlay: "p",
-      baselineCompetency: "Articulating requirements",
-      mindsetMove: "m",
-      skillMove: "k",
-      coachingNote: null,
-    };
-    const ok = { clientName: "A", oneLineRead: "x", dimensions: [base], breezemerchantRead: "y" };
-    expect(() => BriefingSchema.parse(ok)).not.toThrow();
-    expect(() =>
-      BriefingSchema.parse({ ...ok, dimensions: [{ ...base, anchorTheme: "marketing" }] }),
-    ).toThrow();
+  it("every trigger maps to a real Valtech competency and a real builder competency", () => {
+    for (const t of TRIGGERS) {
+      expect(VALTECH[t.trad]).toBeDefined();
+      expect(BUILDER[t.build]).toBeDefined();
+      expect(t.scenario.length).toBeGreaterThan(0);
+    }
   });
 
-  it("rejects a briefing with zero dimensions", () => {
-    expect(() =>
-      BriefingSchema.parse({ clientName: "Acme", oneLineRead: "x", dimensions: [], breezemerchantRead: "y" }),
-    ).toThrow();
+  it("builderToTrigger points every collectible skill at a real trigger", () => {
+    for (const id of COLLECTIBLE) {
+      expect(triggerById(builderToTrigger[id])).toBeDefined();
+    }
   });
 
-  it("validates analyze input and rejects empty text or bad competency", () => {
-    expect(() =>
-      AnalyzeInputSchema.parse({
-        text: "hello world",
-        engagement: "greenfield",
-        phase: "discovery",
-        posture: "pragmatic",
-        competency: validCompetency,
-      }),
-    ).not.toThrow();
-    expect(() =>
-      AnalyzeInputSchema.parse({
-        text: "",
-        engagement: "greenfield",
-        phase: "discovery",
-        posture: "pragmatic",
-        competency: validCompetency,
-      }),
-    ).toThrow();
-    expect(() =>
-      AnalyzeInputSchema.parse({
-        text: "ok",
-        engagement: "greenfield",
-        phase: "discovery",
-        posture: "pragmatic",
-        competency: { ...validCompetency, vision: "expert" },
-      }),
-    ).toThrow();
+  it("builderId resolves a short name back to its id", () => {
+    expect(builderId(BUILDER[8].short)).toBe(8);
   });
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run → fails** (`npm test -- data`): cannot find modules.
 
-Run: `npm test -- schema`
-Expected: FAIL — cannot find module `./schema`.
+- [ ] **Step 3: Implement the three modules**
 
-- [ ] **Step 3: Write the implementation**
+Port `BUILDER`, `TIER_NAME`, `COLLECTIBLE`, `builderId`, `VALTECH`, `TRIGGERS`, `triggerById`, `builderToTrigger`, `APPETITE` **verbatim from `prototype/product-builder.html`** (top of the script). Add TypeScript types and the `tier` typing. The prototype's `BUILDER` already carries `tier/short/line`; the `tell` field is authored in [`docs/pov/pm-role-shift-framework.md`](../../pov/pm-role-shift-framework.md) — copy each competency's tell across so `BUILDER[id].tell` exists. Triggers already carry `gloss/builder/why/steps/prompt/timebox/skip/scenario/scenAppetite/scenPhase`.
+
+- [ ] **Step 4: Run → passes** (`npm test -- data`).
+
+- [ ] **Step 5: Commit** — `git commit -m "feat: add builder, valtech, and trigger domain data"`
+
+---
+
+### Task 3: Skills maths and recommendation
+
+**Files:** Create `lib/skills.ts`. Test: `lib/skills.test.ts`.
+
+**Interfaces:** `REPS_PER_LEVEL = 3`, `LEVEL_NAME`, `skillLevel(reps): 0..4`, `skillProgress(reps): 0..1`, `skillLabel(reps): string`, `recommendSkill(skills: Record<number,number>): number`.
+
+- [ ] **Step 1: Failing test**
+
+```ts
+import { describe, it, expect } from "vitest";
+import { skillLevel, skillProgress, skillLabel, recommendSkill, REPS_PER_LEVEL } from "./skills";
+
+describe("skills maths", () => {
+  it("levels up every REPS_PER_LEVEL reps and caps at 4", () => {
+    expect(skillLevel(0)).toBe(0);
+    expect(skillLevel(REPS_PER_LEVEL)).toBe(1);
+    expect(skillLevel(REPS_PER_LEVEL * 4)).toBe(4);
+    expect(skillLevel(99)).toBe(4);
+  });
+  it("progress is the fraction toward next level, 1 when maxed", () => {
+    expect(skillProgress(0)).toBe(0);
+    expect(skillProgress(1)).toBeCloseTo(1 / REPS_PER_LEVEL);
+    expect(skillProgress(REPS_PER_LEVEL * 4)).toBe(1);
+  });
+  it("labels not-started, started, and levelled states", () => {
+    expect(skillLabel(0)).toBe("Not started");
+    expect(skillLabel(1)).toBe("Started");
+    expect(skillLabel(REPS_PER_LEVEL)).toContain("Level 1");
+  });
+  it("recommends the least-developed collectible skill with tie-breaking", () => {
+    const skills = { 4: 4, 5: 2, 6: 7, 7: 0, 8: 0, 9: 3 };
+    expect(recommendSkill(skills)).toBe(8); // 7 and 8 both 0; order prefers 8
+  });
+});
+```
+
+- [ ] **Step 2: Run → fails.**
+
+- [ ] **Step 3: Implement** — port `REPS_PER_LEVEL`, `LEVEL_NAME`, `skillLevel`, `skillProgress`, `skillLabel`, `recommendSkill` verbatim from the prototype (the `order = [8,7,9,5,4,6]` tie-break must match).
+
+- [ ] **Step 4: Run → passes.**
+
+- [ ] **Step 5: Commit** — `git commit -m "feat: add skill progression maths and recommendation"`
+
+---
+
+### Task 4: Generation schema
+
+**Files:** Create `lib/schema.ts`. Test: `lib/schema.test.ts`.
+
+**Interfaces:**
+- `FrameSchema` (zod) and `type Frame` — the generated two-option output: `{ traditional, builder, competency, verdict: "do-it"|"skip-it", whyClientValues, skip: string|null, steps: string[], prompt, timebox }`.
+- `GenerateInputSchema` and `type GenerateInput` — `{ trigger: string; appetite: string; phase: string; situation: string; level: number; training: boolean }`.
+
+- [ ] **Step 1: Failing test**
+
+```ts
+import { describe, it, expect } from "vitest";
+import { FrameSchema, GenerateInputSchema } from "./schema";
+
+const frame = {
+  traditional: "Read the brief, write a one-pager.",
+  builder: "Prototype the riskiest assumption before kickoff.",
+  competency: "Hands-on prototyping",
+  verdict: "do-it",
+  whyClientValues: "Surfaces risk earlier and cheaper.",
+  skip: null,
+  steps: ["a", "b", "c"],
+  prompt: "Here is a brief: [paste]…",
+  timebox: "Half a day",
+};
+
+describe("schema", () => {
+  it("validates a well-formed frame and a skip-it frame", () => {
+    expect(() => FrameSchema.parse(frame)).not.toThrow();
+    expect(() => FrameSchema.parse({ ...frame, verdict: "skip-it", skip: "Do the one-pager first." })).not.toThrow();
+  });
+  it("rejects an unknown verdict", () => {
+    expect(() => FrameSchema.parse({ ...frame, verdict: "maybe" })).toThrow();
+  });
+  it("validates generate input and rejects a bad appetite or non-1-5 level", () => {
+    const ok = { trigger: "brief", appetite: "pragmatic", phase: "discovery", situation: "", level: 3, training: false };
+    expect(() => GenerateInputSchema.parse(ok)).not.toThrow();
+    expect(() => GenerateInputSchema.parse({ ...ok, appetite: "keen" })).toThrow();
+    expect(() => GenerateInputSchema.parse({ ...ok, level: 6 })).toThrow();
+  });
+});
+```
+
+- [ ] **Step 2: Run → fails.**
+
+- [ ] **Step 3: Implement**
 
 ```ts
 import { z } from "zod";
 
-export const ENGAGEMENT_TYPES = [
-  { value: "greenfield", label: "Greenfield build" },
-  { value: "modernization", label: "Legacy modernization" },
-  { value: "advisory", label: "Advisory" },
-] as const;
-
-export const PHASES = [
-  { value: "discovery", label: "Discovery" },
-  { value: "delivery", label: "Delivery" },
-  { value: "scaling", label: "Scaling" },
-] as const;
-
-export const POSTURES = [
-  { value: "conservative", label: "Conservative" },
-  { value: "pragmatic", label: "Pragmatic" },
-  { value: "forward", label: "Forward-thinking" },
-] as const;
-
-export const COMPETENCY_LEVELS = [
-  { value: "developing", label: "Developing" },
-  { value: "proficient", label: "Proficient" },
-  { value: "advanced", label: "Advanced" },
-] as const;
-
-export const COMPETENCY_THEMES = [
-  { value: "vision", label: "Vision & strategy" },
-  { value: "discovery", label: "Discovery" },
-  { value: "execution", label: "Execution" },
-  { value: "consulting", label: "Consulting" },
-] as const;
-
-const values = (opts: readonly { value: string }[]) =>
-  opts.map((o) => o.value) as [string, ...string[]];
-
-const engagementValues = values(ENGAGEMENT_TYPES);
-const phaseValues = values(PHASES);
-const postureValues = values(POSTURES);
-const levelEnum = z.enum(values(COMPETENCY_LEVELS));
-const themeEnum = z.enum(values(COMPETENCY_THEMES));
-
-export const CompetencySchema = z.object({
-  vision: levelEnum,
-  discovery: levelEnum,
-  execution: levelEnum,
-  consulting: levelEnum,
+export const FrameSchema = z.object({
+  traditional: z.string().describe("The established Valtech move, glossed for this situation."),
+  builder: z.string().describe("The specific, actionable AI-native move. Not a slogan."),
+  competency: z.string().describe("The builder competency short-name this move builds."),
+  verdict: z.enum(["do-it", "skip-it"]),
+  whyClientValues: z.string().describe("Why this is worth doing, grounded in client delivery value."),
+  skip: z.string().nullable().describe("If skip-it: the honest traditional alternative. Else null."),
+  steps: z.array(z.string()).min(2).max(4),
+  prompt: z.string().describe("A copyable prompt with bracketed blanks."),
+  timebox: z.string(),
 });
+export type Frame = z.infer<typeof FrameSchema>;
 
-export const DimensionSchema = z.object({
-  name: z.string().describe("The shift dimension name, e.g. 'Discovery → Sensing'."),
-  anchorTheme: themeEnum.describe("The single Valtech competency theme this dimension evolves from."),
-  signal: z
-    .string()
-    .describe("What this client's real text signals on this dimension; quote where possible."),
-  hypeToDiscount: z
-    .string()
-    .describe("The breeze-merchant version of this dimension, and why it does not apply here."),
-  howToPlay: z
-    .string()
-    .describe("Guidance tuned to the client's posture — how hard to push the builder agenda here."),
-  baselineCompetency: z
-    .string()
-    .describe("The relevant Valtech 'today' competency this evolves from."),
-  mindsetMove: z.string().describe("One mindset shift for this PM in this phase."),
-  skillMove: z
-    .string()
-    .describe("One concrete skill to practise, tuned to the PM's level on this dimension's anchor theme."),
-  coachingNote: z
-    .string()
-    .nullable()
-    .describe(
-      "Coaching layer: present (a 'coach the client team' action) when the PM's consulting level is advanced; null otherwise.",
-    ),
+export const GenerateInputSchema = z.object({
+  trigger: z.string(),
+  appetite: z.enum(["conservative", "pragmatic", "ambitious"]),
+  phase: z.enum(["discovery", "definition", "delivery"]),
+  situation: z.string(),
+  level: z.number().int().min(1).max(5),
+  training: z.boolean(),
 });
-
-export const BriefingSchema = z.object({
-  clientName: z.string().describe("Best-guess client/company name from the context."),
-  oneLineRead: z.string().describe("A single sharp sentence summarising the read."),
-  dimensions: z
-    .array(DimensionSchema)
-    .min(1)
-    .max(3)
-    .describe("Only the 2-3 dimensions that matter most for this engagement and phase."),
-  breezemerchantRead: z
-    .string()
-    .describe("Meta hype-resistance summary: where this client is real vs noise, tuned to posture."),
-});
-
-export type Briefing = z.infer<typeof BriefingSchema>;
-export type Competency = z.infer<typeof CompetencySchema>;
-
-export const AnalyzeInputSchema = z.object({
-  text: z.string().min(1),
-  engagement: z.enum(engagementValues),
-  phase: z.enum(phaseValues),
-  posture: z.enum(postureValues),
-  competency: CompetencySchema,
-});
-
-export type AnalyzeInput = z.infer<typeof AnalyzeInputSchema>;
+export type GenerateInput = z.infer<typeof GenerateInputSchema>;
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run → passes.**
 
-Run: `npm test -- schema`
-Expected: PASS (4 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add lib/schema.ts lib/schema.test.ts
-git commit -m "feat: add briefing schema and shared input types"
-```
+- [ ] **Step 5: Commit** — `git commit -m "feat: add generation schema and input types"`
 
 ---
 
-### Task 3: URL fetch and text extraction
+### Task 5: Generation + deterministic fallback
 
-**Files:**
-- Create: `lib/extract.ts`
-- Test: `lib/extract.test.ts`
-- Test fixture: `lib/__fixtures__/job-posting.html`
+**Files:** Create `lib/generate.ts`. Test: `lib/generate.test.ts`.
 
 **Interfaces:**
-- Consumes: nothing from earlier tasks.
-- Produces:
-  - `extractReadableText(html: string, url: string): string` — pure function; strips a full HTML document to readable text. Throws `Error` with message `"too-thin"` if the result is under 200 characters.
-  - `fetchUrlText(url: string): Promise<string>` — fetches the URL (10s timeout, 2MB cap) and returns `extractReadableText(...)`. Throws `Error` with message `"fetch-failed"` on any network/HTTP failure.
+- `buildPrompt(input, trigger, valtech, builder): { system: string; user: string }` — pure.
+- `fallbackFrame(trigger, appetite): Frame` — deterministic, from trigger content; `skip-it` only when `appetite === "conservative"` and the trigger has a `skip`.
+- `generateFrame(input): Promise<Frame>` — structured Claude call; returns `fallbackFrame` on any error.
 
-- [ ] **Step 1: Create the test fixture `lib/__fixtures__/job-posting.html`**
-
-```html
-<!doctype html>
-<html>
-  <head><title>Senior Product Manager — Acme</title></head>
-  <body>
-    <nav>Home About Careers</nav>
-    <article>
-      <h1>Senior Product Manager</h1>
-      <p>Acme is hiring a Senior Product Manager to lead continuous discovery
-      across our platform. You will run weekly user interviews, work closely with
-      data, and prototype ideas with our design and engineering teams. We value
-      experimentation and killing work fast. Experience with agentic workflows and
-      AI-assisted delivery is a strong plus.</p>
-      <p>You will own outcomes, not output, and help us move fast on signal.</p>
-    </article>
-    <footer>Copyright Acme</footer>
-  </body>
-</html>
-```
-
-- [ ] **Step 2: Write the failing test**
+- [ ] **Step 1: Failing test (pure functions only; network not invoked)**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { extractReadableText } from "./extract";
+import { buildPrompt, fallbackFrame } from "./generate";
+import { triggerById } from "./triggers";
+import { VALTECH } from "./valtech";
+import { BUILDER } from "./builder";
 
-const fixture = readFileSync(join(__dirname, "__fixtures__/job-posting.html"), "utf8");
-
-describe("extractReadableText", () => {
-  it("pulls the article body and drops nav/footer chrome", () => {
-    const text = extractReadableText(fixture, "https://example.com/jobs/123");
-    expect(text).toContain("continuous discovery");
-    expect(text).toContain("agentic workflows");
-    expect(text).not.toContain("Home About Careers");
-  });
-
-  it("throws 'too-thin' when there is almost no text", () => {
-    expect(() => extractReadableText("<html><body><p>hi</p></body></html>", "https://x.com")).toThrow(
-      "too-thin",
-    );
-  });
-});
-```
-
-- [ ] **Step 3: Run test to verify it fails**
-
-Run: `npm test -- extract`
-Expected: FAIL — cannot find module `./extract`.
-
-- [ ] **Step 4: Write the implementation**
-
-```ts
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
-
-const MIN_CHARS = 200;
-const MAX_BYTES = 2_000_000;
-const TIMEOUT_MS = 10_000;
-
-export function extractReadableText(html: string, url: string): string {
-  const dom = new JSDOM(html, { url });
-  const article = new Readability(dom.window.document).parse();
-  const text = (article?.textContent ?? "").replace(/\s+/g, " ").trim();
-  if (text.length < MIN_CHARS) {
-    throw new Error("too-thin");
-  }
-  return text;
-}
-
-export async function fetchUrlText(url: string): Promise<string> {
-  let html: string;
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: { "user-agent": "breezemerchant/0.1 (+internal Valtech tool)" },
-    });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error(`status ${res.status}`);
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > MAX_BYTES) throw new Error("too-large");
-    html = new TextDecoder().decode(buf);
-  } catch {
-    throw new Error("fetch-failed");
-  }
-  return extractReadableText(html, url);
-}
-```
-
-- [ ] **Step 5: Run test to verify it passes**
-
-Run: `npm test -- extract`
-Expected: PASS (2 tests).
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add lib/extract.ts lib/extract.test.ts lib/__fixtures__/job-posting.html
-git commit -m "feat: add URL fetch and readable-text extraction"
-```
-
----
-
-### Task 4: POV framework loader
-
-**Files:**
-- Create: `lib/pov.ts`
-- Test: `lib/pov.test.ts`
-
-**Interfaces:**
-- Consumes: the existing file `docs/pov/pm-role-shift-framework.md`.
-- Produces: `loadPovFramework(): string` — reads the framework markdown from disk and returns its contents. Throws if the file is missing.
-
-- [ ] **Step 1: Write the failing test**
-
-```ts
-import { describe, it, expect } from "vitest";
-import { loadPovFramework } from "./pov";
-
-describe("loadPovFramework", () => {
-  it("loads the authored framework and includes the shift dimensions", () => {
-    const pov = loadPovFramework();
-    expect(pov).toContain("Discovery → Sensing");
-    expect(pov).toContain("Hype-resistance");
-    expect(pov.length).toBeGreaterThan(500);
-  });
-});
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `npm test -- pov`
-Expected: FAIL — cannot find module `./pov`.
-
-- [ ] **Step 3: Write the implementation**
-
-```ts
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-const POV_PATH = join(process.cwd(), "docs/pov/pm-role-shift-framework.md");
-
-export function loadPovFramework(): string {
-  return readFileSync(POV_PATH, "utf8");
-}
-```
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `npm test -- pov`
-Expected: PASS (1 test).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add lib/pov.ts lib/pov.test.ts
-git commit -m "feat: load the authored POV framework at request time"
-```
-
----
-
-### Task 5: Analysis module (the Claude call)
-
-**Files:**
-- Create: `lib/analyze.ts`
-- Test: `lib/analyze.test.ts`
-
-**Interfaces:**
-- Consumes: `AnalyzeInput`, `Briefing`, `BriefingSchema` from `lib/schema.ts`; `loadPovFramework` from `lib/pov.ts`; `ENGAGEMENT_TYPES`, `PHASES` from `lib/schema.ts`.
-- Produces:
-  - `buildPrompt(input: AnalyzeInput, pov: string): { system: string; user: string }` — pure function assembling the prompt. Testable without the network.
-  - `analyze(input: AnalyzeInput): Promise<Briefing>` — makes the structured Claude call and returns a validated `Briefing`.
-
-**Notes on the Claude call (from the claude-api skill):**
-- Use `@anthropic-ai/sdk` with `client.messages.parse({ ..., output_config: { format: zodOutputFormat(BriefingSchema) } })`. Structured outputs guarantee the response matches the schema, so no manual JSON parsing or escaping handling is needed.
-- Model `claude-opus-4-8`; `thinking: { type: "adaptive" }`; `output_config.effort: "medium"` for a reasonable demo latency/quality balance.
-- `response.parsed_output` is the validated object (may be `null` only on refusal/`max_tokens`); guard it.
-
-- [ ] **Step 1: Write the failing test (prompt assembly — pure, no network)**
-
-```ts
-import { describe, it, expect } from "vitest";
-import { buildPrompt } from "./analyze";
-
-const input = {
-  text: "We run weekly agent-evals against our PDLC.",
-  engagement: "modernization" as const,
-  phase: "delivery" as const,
-  posture: "forward" as const,
-  competency: {
-    vision: "proficient" as const,
-    discovery: "developing" as const,
-    execution: "advanced" as const,
-    consulting: "advanced" as const,
-  },
-};
+const t = triggerById("brief")!;
 
 describe("buildPrompt", () => {
-  it("embeds the POV and the conditioning rules in the system prompt", () => {
-    const { system } = buildPrompt(input, "POV-FRAMEWORK-CONTENTS");
-    expect(system).toContain("POV-FRAMEWORK-CONTENTS");
-    expect(system).toContain("2-3");
-    expect(system).toContain("anchorTheme");
-    expect(system).toContain("howToPlay");
-    expect(system).toContain("coachingNote");
+  it("grounds the prompt in both frameworks at the PM's level and flags training", () => {
+    const { system, user } = buildPrompt(
+      { trigger: "brief", appetite: "ambitious", phase: "discovery", situation: "vague AI ask", level: 2, training: true },
+      t, VALTECH[t.trad], BUILDER[t.build],
+    );
+    expect(system).toContain("Valtech");
+    expect(system).toContain("skip-it");
+    expect(user).toContain("ambitious");
+    expect(user).toContain(VALTECH[t.trad].levels[1]); // level 2 statement
+    expect(user).toContain(BUILDER[t.build].short);
+    expect(user).toContain("training");
   });
+});
 
-  it("embeds the labelled inputs and per-theme levels in the user message", () => {
-    const { user } = buildPrompt(input, "POV");
-    expect(user).toContain("Legacy modernization");
-    expect(user).toContain("Delivery");
-    expect(user).toContain("Forward-thinking");
-    expect(user).toContain("weekly agent-evals");
-    expect(user).toContain("Discovery: Developing");
-    expect(user).toContain("Execution: Advanced");
-    expect(user).toContain("Consulting: Advanced");
+describe("fallbackFrame", () => {
+  it("returns do-it for a pragmatic client", () => {
+    const f = fallbackFrame(t, "pragmatic");
+    expect(f.verdict).toBe("do-it");
+    expect(f.competency).toBe(BUILDER[t.build].short);
+    expect(f.steps.length).toBeGreaterThanOrEqual(2);
+  });
+  it("returns skip-it for a conservative client when the trigger has a skip", () => {
+    const f = fallbackFrame(t, "conservative");
+    expect(f.verdict).toBe("skip-it");
+    expect(f.skip).toBeTruthy();
   });
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run → fails.**
 
-Run: `npm test -- analyze`
-Expected: FAIL — cannot find module `./analyze`.
-
-- [ ] **Step 3: Write the implementation**
+- [ ] **Step 3: Implement**
 
 ```ts
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import {
-  AnalyzeInput,
-  Briefing,
-  BriefingSchema,
-  ENGAGEMENT_TYPES,
-  PHASES,
-  POSTURES,
-  COMPETENCY_LEVELS,
-  COMPETENCY_THEMES,
-} from "./schema";
-import { loadPovFramework } from "./pov";
+import { Frame, FrameSchema, GenerateInput } from "./schema";
+import { triggerById, Trigger } from "./triggers";
+import { VALTECH, ValtechCompetency } from "./valtech";
+import { BUILDER, BuilderCompetency, COLLECTIBLE } from "./builder";
 
-function labelFor(options: readonly { value: string; label: string }[], value: string): string {
-  return options.find((o) => o.value === value)?.label ?? value;
-}
-
-export function buildPrompt(input: AnalyzeInput, pov: string): { system: string; user: string } {
-  const engagementLabel = labelFor(ENGAGEMENT_TYPES, input.engagement);
-  const phaseLabel = labelFor(PHASES, input.phase);
-  const postureLabel = labelFor(POSTURES, input.posture);
-  const levelLabel = (v: string) => labelFor(COMPETENCY_LEVELS, v);
-
-  const competencyLines = COMPETENCY_THEMES.map(
-    (t) => `- ${t.label}: ${levelLabel(input.competency[t.value as keyof AnalyzeInput["competency"]])}`,
-  ).join("\n");
-
+export function buildPrompt(
+  input: GenerateInput, t: Trigger, v: ValtechCompetency, b: BuilderCompetency,
+): { system: string; user: string } {
   const system = [
-    "You are breezemerchant — Valtech's internal antidote to PM hype ('breeze merchants').",
-    "You help a Product Manager work out where to focus their mindset and skills to show up",
-    "as a 'Product Builder' / AI-PM at a specific client. You are sharp, specific, and allergic",
-    "to LinkedIn-style platitudes.",
-    "",
-    "Below is Valtech's authored POV framework. It has two halves: a 'today' competency baseline",
-    "(four themes: Vision & strategy, Discovery, Execution, Consulting) and a set of future-vector",
-    "shift dimensions. Map the client's REAL signals onto this model. Do not invent the framework.",
-    "",
-    "=== POV FRAMEWORK ===",
-    pov,
-    "=== END POV FRAMEWORK ===",
-    "",
-    "Rules for the briefing:",
-    "- Surface ONLY the 2-3 shift dimensions that matter most for the given engagement type and phase.",
-    "- For each dimension set `anchorTheme` to the single competency theme it most evolves from",
-    "  (vision | discovery | execution | consulting).",
-    "- `signal`: quote or paraphrase the client's real text. `hypeToDiscount`: the breeze-merchant",
-    "  version and why it doesn't apply here. `baselineCompetency`: the relevant 'today' competency.",
-    "- `howToPlay`: tune to the client's POSTURE. Conservative → push quietly, let results not labels",
-    "  make the case, avoid over-evangelising AI. Pragmatic → pair every bold move with a number or",
-    "  guardrail. Forward-thinking → lead with the boldest version; under-reaching is the risk.",
-    "- `mindsetMove` + `skillMove`: framed for the PHASE. Tune the skill move's DEPTH to the PM's level",
-    "  on THIS dimension's anchorTheme — developing → scaffold the habit (smaller first step, more",
-    "  support); proficient → apply the practice directly; advanced → stretch toward leading/owning it.",
-    "- `coachingNote`: if the PM's CONSULTING level is 'advanced', add a concrete 'coach the client team'",
-    "  action for this dimension (modelling & coaching is the Consulting competency). If 'developing',",
-    "  set it to a short 'build this in yourself before you coach it' note. If 'proficient', use null.",
-    "- `breezemerchantRead`: a short, honest meta-summary of where this client is real vs noise,",
-    "  with its closing stance tuned to the posture.",
-    "- Be concrete. No platitudes.",
+    "You are a working tool for product managers at Valtech, a digital product consultancy delivering client work.",
+    "Given a work trigger, the client's appetite for new ways of working, and the PM's situation, produce two grounded options.",
+    "The 'traditional' option is the established move from Valtech's competency framework for the relevant competency at the PM's level (provided). The 'builder' option is the AI-native move from the Product Builder model for the provided competency.",
+    "Be practical and specific. No buzzwords, no selling, no talk of looking modern. Ground the value in client delivery.",
+    "If the builder move would not serve THIS client given their appetite, set verdict to 'skip-it' and give the honest alternative (the reliable traditional move).",
+    `The competency field must be one of: ${COLLECTIBLE.map((i) => BUILDER[i].short).join(", ")}.`,
   ].join("\n");
-
   const user = [
-    `Engagement type: ${engagementLabel}`,
-    `Project phase: ${phaseLabel}`,
-    `Client posture toward builders / AI-PMs: ${postureLabel}`,
-    "",
-    "The PM's current Valtech competency levels:",
-    competencyLines,
-    "",
-    "Client context (extracted from a live page, or pasted):",
-    '"""',
-    input.text,
-    '"""',
-    "",
-    "Produce the briefing.",
+    `Trigger: ${t.title}`,
+    `Mode: ${input.training ? "training scenario (off-client practice)" : "real client work"}`,
+    `Client appetite: ${input.appetite}`,
+    `Delivery phase: ${input.phase}`,
+    `Situation: ${input.situation || "(not specified)"}`,
+    `Relevant Valtech competency: ${t.trad} (${v.theme}). At level ${input.level}: ${v.levels[input.level - 1]}`,
+    `Target builder skill: ${b.short}. ${b.line}`,
+    "Produce the two-option frame.",
   ].join("\n");
-
   return { system, user };
 }
 
-export async function analyze(input: AnalyzeInput): Promise<Briefing> {
-  const pov = loadPovFramework();
-  const { system, user } = buildPrompt(input, pov);
-  const client = new Anthropic();
+export function fallbackFrame(t: Trigger, appetite: string): Frame {
+  const skip = appetite === "conservative" && t.skip;
+  return {
+    traditional: t.gloss,
+    builder: t.builder,
+    competency: BUILDER[t.build].short,
+    verdict: skip ? "skip-it" : "do-it",
+    whyClientValues: t.why,
+    skip: t.skip ?? null,
+    steps: t.steps,
+    prompt: t.prompt,
+    timebox: t.timebox,
+  };
+}
 
-  const response = await client.messages.parse({
-    model: "claude-opus-4-8",
-    max_tokens: 16000,
-    thinking: { type: "adaptive" },
-    output_config: { effort: "medium", format: zodOutputFormat(BriefingSchema) },
-    system,
-    messages: [{ role: "user", content: user }],
-  });
-
-  if (!response.parsed_output) {
-    throw new Error("analysis-failed");
+export async function generateFrame(input: GenerateInput): Promise<Frame> {
+  const t = triggerById(input.trigger);
+  if (!t) throw new Error("unknown-trigger");
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error("no-key");
+    const client = new Anthropic();
+    const { system, user } = buildPrompt(input, t, VALTECH[t.trad], BUILDER[t.build]);
+    const res = await client.messages.parse({
+      model: "claude-opus-4-8",
+      max_tokens: 16000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium", format: zodOutputFormat(FrameSchema) },
+      system,
+      messages: [{ role: "user", content: user }],
+    });
+    if (!res.parsed_output) throw new Error("no-output");
+    return res.parsed_output;
+  } catch {
+    return fallbackFrame(t, input.appetite);
   }
-  return response.parsed_output;
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+(Add `Trigger`, `ValtechCompetency`, `BuilderCompetency` type exports to their modules in Task 2/3 if not already present.)
 
-Run: `npm test -- analyze`
-Expected: PASS (1 test). (Only `buildPrompt` is unit-tested; `analyze` is covered by the golden-path manual run in Task 8.)
+- [ ] **Step 4: Run → passes.**
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add lib/analyze.ts lib/analyze.test.ts
-git commit -m "feat: add structured Claude analysis mapping context onto the POV"
-```
+- [ ] **Step 5: Commit** — `git commit -m "feat: add grounded generation with deterministic fallback"`
 
 ---
 
 ### Task 6: API route
 
-**Files:**
-- Create: `app/api/analyze/route.ts`
+**Files:** Create `app/api/frame/route.ts`.
 
-**Interfaces:**
-- Consumes: `fetchUrlText` from `lib/extract.ts`; `analyze` from `lib/analyze.ts`; `AnalyzeInputSchema` from `lib/schema.ts`.
-- Produces: `POST /api/analyze` accepting JSON `{ url?: string; text?: string; engagement: string; phase: string }`. Returns `{ briefing }` on success or `{ error: "fetch-failed" | "too-thin" | "bad-input" | "analysis-failed" }` with the appropriate status.
+**Interfaces:** `POST /api/frame` accepting `GenerateInput` JSON → `{ frame: Frame }`. Validates with `GenerateInputSchema`; returns `400 {error:"bad-input"}` on validation failure. `generateFrame` never throws (it falls back), so success always returns a frame.
 
 - [ ] **Step 1: Write the route**
 
 ```ts
 import { NextResponse } from "next/server";
-import { fetchUrlText } from "@/lib/extract";
-import { analyze } from "@/lib/analyze";
-import { AnalyzeInputSchema, ENGAGEMENT_TYPES, PHASES } from "@/lib/schema";
+import { GenerateInputSchema } from "@/lib/schema";
+import { generateFrame } from "@/lib/generate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const engagementValues = ENGAGEMENT_TYPES.map((o) => o.value);
-const phaseValues = PHASES.map((o) => o.value);
-
 export async function POST(req: Request) {
-  let body: {
-    url?: string;
-    text?: string;
-    engagement?: string;
-    phase?: string;
-    posture?: string;
-    competency?: unknown;
-  };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "bad-input" }, { status: 400 });
-  }
-
-  const { url, text, engagement, phase, posture, competency } = body;
-  if (
-    !engagement ||
-    !phase ||
-    !engagementValues.includes(engagement) ||
-    !phaseValues.includes(phase)
-  ) {
-    return NextResponse.json({ error: "bad-input" }, { status: 400 });
-  }
-
-  // Resolve the client text: prefer pasted text; otherwise fetch the URL.
-  let clientText: string;
-  try {
-    if (text && text.trim().length > 0) {
-      clientText = text.trim();
-      if (clientText.length < 200) {
-        return NextResponse.json({ error: "too-thin" }, { status: 422 });
-      }
-    } else if (url && url.trim().length > 0) {
-      clientText = await fetchUrlText(url.trim());
-    } else {
-      return NextResponse.json({ error: "bad-input" }, { status: 400 });
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "fetch-failed";
-    const status = msg === "too-thin" ? 422 : 502;
-    return NextResponse.json({ error: msg === "too-thin" ? "too-thin" : "fetch-failed" }, { status });
-  }
-
-  const parsed = AnalyzeInputSchema.safeParse({
-    text: clientText,
-    engagement,
-    phase,
-    posture,
-    competency,
-  });
-  if (!parsed.success) {
-    return NextResponse.json({ error: "bad-input" }, { status: 400 });
-  }
-
-  try {
-    const briefing = await analyze(parsed.data);
-    return NextResponse.json({ briefing });
-  } catch {
-    return NextResponse.json({ error: "analysis-failed" }, { status: 502 });
-  }
+  let body: unknown;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "bad-input" }, { status: 400 }); }
+  const parsed = GenerateInputSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "bad-input" }, { status: 400 });
+  const frame = await generateFrame(parsed.data);
+  return NextResponse.json({ frame });
 }
 ```
 
-- [ ] **Step 2: Verify it type-checks and builds**
+- [ ] **Step 2: Build** — `npm run build` → `/api/frame` in the route list.
 
-Run: `npm run build`
-Expected: build succeeds; `/api/analyze` appears in the route list.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add app/api/analyze/route.ts
-git commit -m "feat: add /api/analyze route with fetch + paste fallback"
-```
+- [ ] **Step 3: Commit** — `git commit -m "feat: add /api/frame generation route"`
 
 ---
 
-### Task 7: Input form and briefing view
+### Task 7: UI — port the prototype to Next.js
 
-**Files:**
-- Create: `app/page.tsx` (replace the placeholder)
-- Create: `app/components/InputForm.tsx`
-- Create: `app/components/Briefing.tsx`
-- Create: `app/components/types.ts`
+**Files:** Replace `app/page.tsx`; create `app/components/{App,Work,Skills,History,PromptBox,Ring}.tsx` (or a structure of your choosing). Mark client components with `"use client"`.
 
-**Interfaces:**
-- Consumes: `Briefing` type from `lib/schema.ts`; `ENGAGEMENT_TYPES`, `PHASES`, `POSTURES`, `COMPETENCY_LEVELS`, `COMPETENCY_THEMES`, `Competency` from `lib/schema.ts`; `POST /api/analyze`.
-- Produces: a single-screen flow — form → loading → briefing, with an inline error state and a paste-the-text fallback.
+**Canonical reference:** [`prototype/product-builder.html`](../../../prototype/product-builder.html). Port its component tree, state, and **all `bm`/Valtech class names + the `Style` rules into `breezemerchant.css`** (move the prototype's remapped CSS into the stylesheet rather than an inline `<style>`). The prototype is the source of truth for markup and behaviour. The only behavioural change from the prototype: the result view fetches from **`POST /api/frame`** instead of calling the model in the browser.
 
-**Canonical layout & styling:** [`prototype/discovery-briefing.html`](../../../prototype/discovery-briefing.html)
-is the reference for markup and classes — it already uses `valtech.css` + `breezemerchant.css`
-(loaded in Task 1). Port its `bm-*` class structure into these React components rather than
-inventing new styles. The code blocks below are functional scaffolding (state, fields, fetch,
-render); use the prototype's classes for the actual look. The form must collect **five** inputs:
-URL (+ paste fallback), engagement, phase, posture, and the four competency levels. The briefing
-view must render each dimension's `anchorTheme`, `signal`, `hypeToDiscount`, `howToPlay`,
-`baselineCompetency`, `mindsetMove`, `skillMove`, and `coachingNote` (when non-null), plus the
-header (`clientName`, `oneLineRead`) and footer (`breezemerchantRead`).
+**Interfaces:** Consumes `BUILDER`, `VALTECH`, `TRIGGERS`, `triggerById`, `builderToTrigger`, `APPETITE`, `skillLabel`/`skillLevel`/`skillProgress`/`recommendSkill`/`REPS_PER_LEVEL` from `lib/`; `NOMI_SEED` from `lib/user.ts`; `Frame` from `lib/schema.ts`; `POST /api/frame`.
 
-> ⚠️ The inline `var(--panel)`, `var(--line)`, `var(--ink)`, `var(--accent)`, `var(--bg)`,
-> `var(--muted)` in the scaffolding below are leftovers from an earlier theme and are **not
-> defined** by the Valtech stylesheets. Replace them with `bm-*` classes from the prototype
-> (or, as a quick map: `--panel`→`--vt-white`, `--line`→`--vt-rule`, `--ink`→`--vt-fg`,
-> `--accent`→`--vt-accent`, `--bg`→`--vt-paper`, `--muted`→`--vt-fg-soft`).
+- [ ] **Step 1: Create `lib/user.ts`** — port `NOMI_SEED` + `User`/`Activity` types from the prototype. An `Activity` carries `{ build, trigger, taken, training, when, ctx?, shownLevel?, result?: Frame & {competency} }`.
 
-- [ ] **Step 1: Create `app/components/types.ts`**
+- [ ] **Step 2: Port the App shell** (`app/page.tsx` + `App`) — in-memory user state (`useState`), `tab` ∈ `work|skills|history`, `homeNonce`, `launch`. Header: **wordmark = home** (`goHome` sets tab `work` + bumps `homeNonce`); username + **framework-level dropdown** (`setLevel`); nav buttons **Skills** and **History** only.
 
-```ts
-import type { Briefing } from "@/lib/schema";
+- [ ] **Step 3: Port the Work view** — home (triggers + "Generate a training scenario" + recommended-next), setup (appetite, phase, situation textarea, **document upload** reading text files client-side), gen (spinner), result (the two-option fork with level pips, why, steps, `PromptBox`, log/skip). Replace the prototype's `callClaude` flow with a `fetch("/api/frame", { method: "POST", body: JSON.stringify({ trigger, appetite, phase, situation, level, training }) })`; on network failure, call a client copy of the canned content is unnecessary — the route already falls back, so just surface an error toast if the request itself fails.
 
-export type AnalyzeResponse = { briefing: Briefing } | { error: string };
-```
+- [ ] **Step 4: Port Skills** — profile stats, build-next (real) + practise (training) cards, skill grid by tier with `Ring`, Foundations chips, "see full history" link.
 
-- [ ] **Step 2: Create `app/components/Briefing.tsx`**
+- [ ] **Step 5: Port History** — expandable entries (`<details>`) showing the captured `result` (both options, verdict, steps, prompt) and a `practice` tag for training moves; graceful fallback for entries with no captured advice.
 
-```tsx
-import type { Briefing } from "@/lib/schema";
+- [ ] **Step 6: Move the prototype's CSS into `breezemerchant.css`** — append the `bm`/component rules (re-mapped to `--vt-*` tokens) so the components are styled by the shared stylesheet, not an inline block.
 
-export function BriefingView({ briefing }: { briefing: Briefing }) {
-  return (
-    <section style={{ display: "grid", gap: 20 }}>
-      <header style={{ borderBottom: "1px solid var(--line)", paddingBottom: 12 }}>
-        <h2 style={{ margin: "0 0 6px" }}>{briefing.clientName}</h2>
-        <p style={{ margin: 0, color: "var(--accent)", fontStyle: "italic" }}>{briefing.oneLineRead}</p>
-      </header>
+- [ ] **Step 7: Build** — `npm run build` → succeeds, no type errors.
 
-      {briefing.dimensions.map((d, i) => (
-        <article
-          key={i}
-          style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: 16 }}
-        >
-          <h3 style={{ marginTop: 0 }}>{d.name}</h3>
-          <Field label={`Anchors to ${d.anchorTheme}`} value={d.signal} />
-          <Field label="Hype to discount" value={d.hypeToDiscount} />
-          <Field label="How to play it" value={d.howToPlay} />
-          <Field label="Your baseline (today)" value={d.baselineCompetency} />
-          <Field label="Mindset move" value={d.mindsetMove} />
-          <Field label="Skill move" value={d.skillMove} />
-          {d.coachingNote && <Field label="Coaching layer" value={d.coachingNote} />}
-        </article>
-      ))}
-
-      <footer style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-        <h4 style={{ margin: "0 0 6px" }}>The breezemerchant read</h4>
-        <p style={{ margin: 0, color: "var(--muted)" }}>{briefing.breezemerchantRead}</p>
-      </footer>
-    </section>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <p style={{ margin: "8px 0" }}>
-      <span style={{ color: "var(--muted)", fontSize: 13, textTransform: "uppercase", letterSpacing: 0.4 }}>
-        {label}
-      </span>
-      <br />
-      {value}
-    </p>
-  );
-}
-```
-
-- [ ] **Step 3: Create `app/components/InputForm.tsx`**
-
-```tsx
-"use client";
-
-import { useState } from "react";
-import {
-  ENGAGEMENT_TYPES,
-  PHASES,
-  POSTURES,
-  COMPETENCY_LEVELS,
-  COMPETENCY_THEMES,
-} from "@/lib/schema";
-import type { AnalyzeResponse } from "./types";
-import type { Briefing, Competency } from "@/lib/schema";
-
-const ERROR_COPY: Record<string, string> = {
-  "fetch-failed": "Couldn't read that page — paste the text in below instead.",
-  "too-thin": "There wasn't enough text to work with. Paste a fuller description below.",
-  "bad-input": "Please provide a URL (or pasted text) plus an engagement type and phase.",
-  "analysis-failed": "The analysis didn't complete. Try again in a moment.",
-};
-
-export function InputForm({ onBriefing }: { onBriefing: (b: Briefing) => void }) {
-  const [url, setUrl] = useState("");
-  const [text, setText] = useState("");
-  const [engagement, setEngagement] = useState(ENGAGEMENT_TYPES[0].value);
-  const [phase, setPhase] = useState(PHASES[0].value);
-  const [posture, setPosture] = useState(POSTURES[1].value); // default: pragmatic
-  const [competency, setCompetency] = useState<Competency>({
-    vision: "proficient",
-    discovery: "proficient",
-    execution: "proficient",
-    consulting: "proficient",
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showPaste, setShowPaste] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, text, engagement, phase, posture, competency }),
-      });
-      const data: AnalyzeResponse = await res.json();
-      if ("briefing" in data) {
-        onBriefing(data.briefing);
-      } else {
-        setError(ERROR_COPY[data.error] ?? "Something went wrong.");
-        if (data.error === "fetch-failed" || data.error === "too-thin") setShowPaste(true);
-      }
-    } catch {
-      setError("Network error. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const field = { background: "var(--bg)", color: "var(--ink)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px", width: "100%" } as const;
-
-  return (
-    <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
-      <label style={{ display: "grid", gap: 6 }}>
-        <span>Client context URL</span>
-        <input
-          style={field}
-          type="url"
-          placeholder="https://… a job posting, careers page, or ways-of-working write-up"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-        />
-      </label>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Engagement type</span>
-          <select style={field} value={engagement} onChange={(e) => setEngagement(e.target.value)}>
-            {ENGAGEMENT_TYPES.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </label>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Project phase</span>
-          <select style={field} value={phase} onChange={(e) => setPhase(e.target.value)}>
-            {PHASES.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <label style={{ display: "grid", gap: 6 }}>
-        <span>Client posture toward builders / AI-PMs</span>
-        <select style={field} value={posture} onChange={(e) => setPosture(e.target.value)}>
-          {POSTURES.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </label>
-
-      <fieldset style={{ border: "0.5px solid var(--vt-rule)", borderRadius: 0, padding: 12, margin: 0 }}>
-        <legend style={{ fontSize: 13 }}>Your level (vs. the Valtech competency themes)</legend>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {COMPETENCY_THEMES.map((t) => (
-            <label key={t.value} style={{ display: "grid", gap: 6 }}>
-              <span>{t.label}</span>
-              <select
-                style={field}
-                value={competency[t.value as keyof Competency]}
-                onChange={(e) =>
-                  setCompetency((c) => ({ ...c, [t.value]: e.target.value as Competency[keyof Competency] }))
-                }
-              >
-                {COMPETENCY_LEVELS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      {(showPaste || text) && (
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Or paste the client text</span>
-          <textarea
-            style={{ ...field, minHeight: 140, resize: "vertical" }}
-            placeholder="Paste a job posting or ways-of-working notes here…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </label>
-      )}
-
-      {!showPaste && !text && (
-        <button type="button" onClick={() => setShowPaste(true)} style={{ background: "none", border: "none", color: "var(--muted)", textAlign: "left", cursor: "pointer", padding: 0 }}>
-          …or paste the text instead
-        </button>
-      )}
-
-      {error && <p style={{ color: "var(--accent)", margin: 0 }}>{error}</p>}
-
-      <button
-        type="submit"
-        disabled={loading}
-        style={{ background: "var(--accent)", color: "#1a1208", border: "none", borderRadius: 8, padding: "12px 16px", fontWeight: 600, cursor: loading ? "default" : "pointer" }}
-      >
-        {loading ? "Reading the page… mapping to the framework…" : "Get the briefing"}
-      </button>
-    </form>
-  );
-}
-```
-
-- [ ] **Step 4: Replace `app/page.tsx`**
-
-```tsx
-"use client";
-
-import { useState } from "react";
-import { InputForm } from "./components/InputForm";
-import { BriefingView } from "./components/Briefing";
-import type { Briefing } from "@/lib/schema";
-
-export default function Page() {
-  const [briefing, setBriefing] = useState<Briefing | null>(null);
-
-  return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px", display: "grid", gap: 28 }}>
-      <header>
-        <h1 style={{ margin: "0 0 6px" }}>breezemerchant</h1>
-        <p style={{ margin: 0, color: "var(--muted)" }}>
-          Cut the hype. Work out where to focus to show up as a Product Builder at your next client.
-        </p>
-      </header>
-
-      {briefing ? (
-        <>
-          <BriefingView briefing={briefing} />
-          <button
-            onClick={() => setBriefing(null)}
-            style={{ background: "none", border: "1px solid var(--line)", color: "var(--ink)", borderRadius: 8, padding: "10px 14px", cursor: "pointer", justifySelf: "start" }}
-          >
-            Start over
-          </button>
-        </>
-      ) : (
-        <InputForm onBriefing={setBriefing} />
-      )}
-    </main>
-  );
-}
-```
-
-- [ ] **Step 5: Verify build**
-
-Run: `npm run build`
-Expected: build succeeds with no type errors.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add app/page.tsx app/components/
-git commit -m "feat: add input form and briefing view with paste fallback"
-```
+- [ ] **Step 8: Commit** — `git commit -m "feat: port the Product Builder UI to Next.js"`
 
 ---
 
 ### Task 8: Golden-path manual verification
 
-**Files:**
-- Create: `docs/superpowers/plans/manual-verification.md` (a short demo script)
+**Files:** Create `docs/superpowers/plans/manual-verification.md`.
 
-**Interfaces:**
-- Consumes: the running app and a real `ANTHROPIC_API_KEY` in `.env.local`.
-
-- [ ] **Step 1: Set up the environment**
-
-Run: `cp .env.local.example .env.local` and edit it to add a real `ANTHROPIC_API_KEY`.
-Expected: `.env.local` exists and is gitignored.
-
-- [ ] **Step 2: Start the dev server**
-
-Run: `npm run dev`
-Expected: server on `http://localhost:3000`.
-
-- [ ] **Step 3: Run the golden path (live fetch)**
-
-In the browser: paste a known, pre-tested public job-posting URL, choose an engagement type, phase, client posture, and your four competency levels, then submit.
-Expected: a loading state, then a briefing with a client name, a one-line read, 2–3 dimensions (each with anchor theme / signal / hype / how-to-play / baseline / mindset move / skill move, plus a coaching layer when Consulting is Advanced), and a breezemerchant read. Re-run with the posture and competency levels changed and confirm the moves visibly adapt.
-
-- [ ] **Step 4: Run the paste fallback**
-
-Click "…or paste the text instead", paste a job description, submit.
-Expected: a briefing renders from the pasted text without any fetch.
-
-- [ ] **Step 5: Verify the error path**
-
-Submit a deliberately bad URL (e.g. `https://example.com/does-not-exist-404`) with the paste box empty.
-Expected: the inline message "Couldn't read that page — paste the text in below instead." and the paste textarea appears.
-
-- [ ] **Step 6: Write the demo script to `docs/superpowers/plans/manual-verification.md`**
-
-Capture: the exact demo URL that worked, the engagement type + phase used, and a one-line note on the expected briefing shape. This is the script to run live at the hackathon.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add docs/superpowers/plans/manual-verification.md
-git commit -m "docs: add golden-path manual verification script"
-```
+- [ ] **Step 1: Env** — `cp .env.local.example .env.local`, add a real `ANTHROPIC_API_KEY` (optional — the app works without it via fallback).
+- [ ] **Step 2: `npm run dev`** → `http://localhost:3000`.
+- [ ] **Step 3: Trigger→Frame→Move→Track** — pick "A new brief landed", set appetite + phase + a one-line situation, generate, confirm the two options render with the traditional statement at your level and an actionable AI-native move; log as done.
+- [ ] **Step 4: Verdict flips** — re-run with appetite **conservative** and confirm a **skip-it** verdict with the honest alternative; with **pragmatic/ambitious** confirm **do-it**.
+- [ ] **Step 5: Level re-levels** — change the header framework level and confirm the traditional column's statement changes.
+- [ ] **Step 6: Training** — "Generate a training scenario", confirm a realistic scenario pre-fills, take the move, confirm a **practice** rep lands in Skills + History.
+- [ ] **Step 7: Upload** — attach a `.txt`/`.md` brief in setup, confirm it loads into the situation.
+- [ ] **Step 8: History** — open History, confirm the logged moves show with the advice as it was, practice tagged distinctly.
+- [ ] **Step 9: Nav** — click the **Product Builder** wordmark from any screen and confirm it returns home.
+- [ ] **Step 10: Write the demo script** to `manual-verification.md` (the exact trigger/appetite used for the live demo). Commit.
 
 ---
 
 ## Self-Review
 
 **Spec coverage:**
-- §1 What it is / §3 Inputs (URL + engagement + phase + posture + per-theme competency, paste fallback) → Tasks 2, 6, 7.
-- §2 Authored model → Task 4 (POV loader); the file already exists and includes the four-theme competency baseline.
-- §4 Output briefing (header, 2–3 dimensions with anchor theme + how-to-play + coaching layer, mindset + skill, footer read) → Task 2 (schema) + Task 5 (prompt) + Task 7 (view).
-- §5 Architecture (Next.js, server-side key, one structured call, Valtech styling via valtech.css + breezemerchant.css) → Tasks 1, 5, 6.
-- §6 Error handling (fetch fail → paste fallback, too-thin, analysis failure, loading state) → Tasks 3, 6, 7.
-- §7 Testing (schema validation, extraction smoke test, golden-path manual) → Tasks 2, 3, 8.
-- §8 Deferred decisions now resolved: all option lists incl. posture + competency levels (Global Constraints + Task 2); per-theme competency granularity; Valtech styling; briefing schema (Task 2); extraction library `@mozilla/readability` + `jsdom` (Task 3).
+- §3 Trigger/Frame/Move/Track → Tasks 2 (triggers), 5–6 (frame generation), 7 (UI loop), 3 (track/skills).
+- §4 Inputs (trigger, appetite, phase, situation+upload, framework level) → Tasks 2, 5, 7.
+- §5 Two-option frame + client-value verdict → Tasks 4 (schema), 5 (generation + fallback verdict), 7 (view).
+- §6 Features: triggers (2), context capture + upload (7), two-option frame + verdict + move (5,7), logging (7), skills progression (3,7), training scenarios (2 data, 5 prompt flag, 7 UI), move history (7), navigation (7), user model (lib/user.ts).
+- §7 Architecture (Next.js, server-side key, structured generation, fallback, Valtech styling) → Tasks 1, 5, 6, 7.
+- §8 Error handling (fallback on unreachable/malformed, upload note, loading) → Tasks 5, 6, 7.
+- §9 Testing (data integrity, skill maths, recommendation, schema, generation/fallback, golden path) → Tasks 2, 3, 4, 5, 8.
 
-**Conditioning logic (posture + competency):** posture drives `howToPlay` and the closing read (Task 5 system rules); each dimension's `anchorTheme` selects which competency rating tunes its `skillMove` depth; `consulting` drives the `coachingNote` overlay. All conditioning lives in the prompt (Task 5) — the schema (Task 2) just carries the fields, and the view (Task 7) renders them.
+**Port fidelity:** the prototype is the source of truth for domain data, the `order` tie-break in `recommendSkill`, trigger/scenario content, and UI markup/classes. The plan's net-new code over the prototype is: TypeScript types, the zod schemas, the server-side `generateFrame` + route, and moving CSS into `breezemerchant.css`.
 
-**Placeholder scan:** No TBDs. Every code step shows complete code; every command shows expected output.
+**Type consistency:** `Frame` / `GenerateInput` (Task 4) are consumed by `generate.ts` (5), the route (6), and the UI (7). `Trigger` / `ValtechCompetency` / `BuilderCompetency` types are exported from Task 2/3 modules and consumed by `buildPrompt` (5). The `Activity.result` type reuses `Frame`.
 
-**Type consistency:** `Briefing` / `BriefingSchema` / `AnalyzeInput` / `AnalyzeInputSchema` defined in Task 2 and consumed by name in Tasks 5, 6, 7. `buildPrompt` / `analyze` signatures in Task 5 match their use in Task 6. `fetchUrlText` / `extractReadableText` in Task 3 match Task 6's import. Error strings (`fetch-failed`, `too-thin`, `bad-input`, `analysis-failed`) are consistent between Task 6 (route) and Task 7 (`ERROR_COPY`).
+**No placeholders:** data and UI steps point at the committed prototype for verbatim content rather than restating ~200 lines; all net-new logic (schema, generate, route, tests) is shown in full.
