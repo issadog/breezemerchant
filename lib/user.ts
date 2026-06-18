@@ -17,7 +17,7 @@ export type Activity = {
   when: string;
   ctx?: { appetite: string; phase: string; situation: string };
   shownLevel?: number;
-  result?: Frame & { competency: string };
+  result?: Frame;
 };
 
 export const NOMI_SEED: User = {

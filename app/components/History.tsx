@@ -19,7 +19,7 @@ export function History({ nomi }: { nomi: User }) {
           const b = BUILDER[a.build];
           const hasDetail = !!a.result;
           return (
-            <details key={i} className="hentry" open={i === 0 && hasDetail}>
+            <details key={`${a.when}-${a.trigger}-${i}`} className="hentry" open={i === 0 && hasDetail}>
               <summary>
                 <span className={`logdot ${a.taken ? "ok" : "skip"}`} />
                 <span className="h-when">{a.when}</span>
@@ -42,7 +42,7 @@ export function History({ nomi }: { nomi: User }) {
                   )}
                   {a.result!.verdict === "skip-it" && (
                     <p className="h-skip">
-                      Verdict at the time: not worth it for this client. {a.result!.skip}
+                      Verdict at the time: not worth it for this client. {a.result!.skip || "The AI-native move would not serve this client right now."}
                     </p>
                   )}
                   <div className="h-fork">

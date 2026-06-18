@@ -23,7 +23,7 @@ export function Work({
 }: {
   nomi: User;
   addRep: (bid: number) => void;
-  logActivity: (entry: Omit<Activity, never>) => void;
+  logActivity: (entry: Activity) => void;
   homeNonce: number;
   launch: { id: string; training: boolean } | null;
   clearLaunch: () => void;
@@ -35,7 +35,7 @@ export function Work({
   const [ctx, setCtx] = useState<Ctx>({ appetite: "pragmatic", phase: "discovery", situation: "" });
   const [training, setTraining] = useState(false);
   const [fileNote, setFileNote] = useState("");
-  const [result, setResult] = useState<(Frame & { competency: string }) | null>(null);
+  const [result, setResult] = useState<Frame | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shownLevel, setShownLevel] = useState(nomi.level);
 
@@ -132,7 +132,7 @@ export function Work({
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { frame: Frame & { competency: string } };
+      const data = (await res.json()) as { frame: Frame };
       setResult(data.frame);
     } catch (err) {
       setError("Could not reach the server. Check your connection and try again.");

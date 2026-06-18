@@ -1,3 +1,5 @@
+"use client";
+
 import { BUILDER, COLLECTIBLE, TIER_NAME } from "@/lib/builder";
 import { REPS_PER_LEVEL, skillLabel, skillLevel, recommendSkill } from "@/lib/skills";
 import { triggerById, builderToTrigger } from "@/lib/triggers";
