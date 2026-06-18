@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Product Builder — Valtech</title>
+<link rel="stylesheet" href="../valtech.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+/*
+  PRODUCT BUILDER — a working tool for Valtech PMs (breezemerchant project).
+  Merged build: the work-moment + two-options + skill-reps model, wearing the
+  Valtech identity (valtech.css tokens + brand fonts). AI generation falls back
+  to grounded canned content when the API is unreachable (always, in this offline prototype).
+*/
+
+// ---------- Product Builder model (drives "The AI-native approach") ----------
+const BUILDER = {
+  1: { tier: 1, short: "Problem & customer insight", line: "Find real, valuable problems grounded in evidence about users." },
+  2: { tier: 1, short: "Strategic prioritisation", line: "Decide what to do and what to refuse, tied to outcomes." },
+  3: { tier: 1, short: "Communication & narrative", line: "Align people on a direction without relying on authority." },
+  4: { tier: 2, short: "AI-accelerated discovery", line: "Compress research with AI while keeping ownership of the signal." },
+  5: { tier: 2, short: "Rapid delivery & orchestration", line: "Tighter build-measure-learn loops; orchestrate AI tools, not only people." },
+  6: { tier: 3, short: "Hands-on prototyping", line: "Idea to a working, testable artifact without an engineering handoff." },
+  7: { tier: 3, short: "AI-native product design", line: "Design around what models can and cannot reliably do." },
+  8: { tier: 3, short: "Evaluation & quality", line: "Define and measure what 'good' means for outputs that vary." },
+  9: { tier: 3, short: "AI judgment & discernment", line: "Tell durable shifts from hype; manage the risks AI introduces." },
+};
+const TIER_NAME = { 1: "Foundations", 2: "Shifted practices", 3: "New capabilities" };
+const COLLECTIBLE = [4, 5, 6, 7, 8, 9];
+const builderId = (label) => {
+  const e = Object.entries(BUILDER).find(([, v]) => v.short.toLowerCase() === String(label).toLowerCase());
+  return e ? Number(e[0]) : 9;
+};
+
+// ---------- Valtech framework excerpt (drives "What most PMs do", by level) ----------
+const VALTECH = {
+  "Hypothesis and assumption identification": {
+    theme: "Discovery",
+    levels: [
+      "I understand the components of good, testable hypotheses and assumptions and can develop them with some support.",
+      "I can define a hypothesis, test criteria and underlying assumptions, articulate the value if proven, and lead a team in testing it.",
+      "I can surface the many assumptions being made in pursuit of an outcome and prioritise which to test first based on risk to the client.",
+      "I challenge stakeholders where they are making untested assumptions and work with them to expose what needs to be tested.",
+      "I use a test-and-learn approach to influence senior stakeholders, and will make the case to stop work on a key bet if the evidence says so.",
+    ],
+  },
+  "Using qualitative data": {
+    theme: "Discovery",
+    levels: [
+      "I understand key qualitative concepts and techniques and can support with collection activities.",
+      "I can identify the best technique and collect qualitative data with some support.",
+      "I use many techniques depending on context, and use the data to communicate about users, their behaviour and needs.",
+      "I influence stakeholders at all levels to collect qualitative data where it is missing and advise on best practice.",
+      "I can set up research teams and embed best-practice qualitative techniques across a company.",
+    ],
+  },
+  "Articulating requirements": {
+    theme: "Execution",
+    levels: [
+      "I understand that requirements are a team sport, not a top-down exercise, and that their form should fit the setting.",
+      "I work with a product team to agree the form and approach to requirements, playing a proactive role in their creation.",
+      "I help sibling teams adopt requirements approaches that balance specific needs with consistency, to drive coordination.",
+      "I coach PMs and other team members to mature and refine their approach to requirements and propagate best practice.",
+      "I lead the introduction of new requirements approaches at an organisational level, including new methods and tooling.",
+    ],
+  },
+  "Ideation": {
+    theme: "Discovery",
+    levels: [
+      "I understand different ideation techniques and the roles required to run them, and can support ideation activities.",
+      "I can pick the best ideation approach for my situation and run cross-functional sessions with some support.",
+      "I am comfortable leading many types of ideation with cross-functional teams and wider stakeholder groups.",
+      "I run ideation across the product lifecycle and use the insight to develop new opportunities for the company.",
+      "I help C-suite stakeholders see the need for team-level ideation and foster cross-functional creativity across teams.",
+    ],
+  },
+  "Managing stakeholders": {
+    theme: "Consulting",
+    levels: [
+      "I can contribute to stakeholder mapping and understand the need to vary my communication approach.",
+      "I identify the key stakeholders on my project and choose appropriate ways to communicate with them.",
+      "I map everyone who can influence my project, categorise them by influence, and deliberately manage those relationships.",
+      "I build and manage direct stakeholder relationships and influence outside my project where needed to keep work moving.",
+      "I influence senior client stakeholders to further the work of my teams.",
+    ],
+  },
+};
+
+// ---------- triggers (entry points) ----------
+const TRIGGERS = [
+  {
+    id: "brief", title: "A new brief landed", sub: "Fresh client work just hit your desk.",
+    trad: "Hypothesis and assumption identification", build: 6,
+    gloss: "Read the brief, write a one-page summary, and book a kickoff to align stakeholders.",
+    builder: "Before kickoff, build a rough prototype of the brief's riskiest assumption, so the first conversation starts from something working.",
+    why: "Clients pay to reduce risk. Testing the hardest assumption in week one surfaces problems earlier and cheaper than a document review.",
+    steps: ["Identify the single assumption that, if wrong, breaks the brief.", "Use an AI build tool to mock the thinnest version of it.", "Bring it to kickoff as an open question, not a finished answer."],
+    prompt: "Here is a client brief: [paste]. Identify the single riskiest unproven assumption, then give me a step-by-step plan to prototype only that assumption in under a day.",
+    timebox: "Half a day",
+    skip: "This client expects a clear written plan before anything is built. Lead with the one-pager, name the risk in writing, and prototype once you have agreement.",
+  },
+  {
+    id: "discovery", title: "Kicking off discovery", sub: "Starting to work out what's really needed.",
+    trad: "Using qualitative data", build: 4,
+    gloss: "Schedule interviews, run a workshop, and synthesise findings into themes over a couple of weeks.",
+    builder: "Use AI to pre-synthesise the inputs you already have, then use interviews to test where the synthesis is wrong rather than starting from zero.",
+    why: "The client sees a direction sooner, and interview time goes to the gaps that matter instead of re-covering known ground.",
+    steps: ["Gather existing inputs: notes, transcripts, support tickets, analytics.", "Have AI cluster them into themes and flag the weakest-supported claims.", "Plan interviews to probe those weak points specifically."],
+    prompt: "Here are our existing research inputs: [paste]. Cluster them into candidate problem themes. For each, rate how strong the evidence is and what you would verify with a real user.",
+    timebox: "One afternoon",
+    skip: "If this client measures discovery rigour in fieldwork hours, run the standard process and use AI in the background. Do not present AI synthesis as the headline.",
+  },
+  {
+    id: "aifeature", title: "Scoping an AI feature", sub: "Something model-driven is on the roadmap.",
+    trad: "Articulating requirements", build: 8,
+    gloss: "Write user stories and acceptance criteria, hand them to engineering, and treat the feature working as done.",
+    builder: "Write the quality bar first: define what good and bad model outputs look like before scoping, because that is what will fail in production.",
+    why: "An AI feature that demos well but fails on real inputs erodes client trust fast. A defined quality bar is what makes it shippable, not just demoable.",
+    steps: ["Collect 10 real inputs the feature will face, including messy and edge cases.", "Write an acceptable and an unacceptable output for each.", "Make that set the definition of done and re-run it on every model change."],
+    prompt: "We are building [feature] using an LLM. Help me draft an evaluation set: 10 representative inputs including edge and adversarial cases, each with a clear pass or fail standard for the output.",
+    timebox: "1 to 2 hours",
+    skip: "If this is only a proof of concept for a board demo, a full eval set is premature. Build the demo, but document the quality work production would require.",
+  },
+  {
+    id: "stuck", title: "Stuck on a problem", sub: "Spinning on something and need a way through.",
+    trad: "Ideation", build: 9,
+    gloss: "Sit with it, ask a colleague, write it up, and bring it to the next team meeting.",
+    builder: "Use AI to reframe the problem three ways you have not tried, then keep only the framing that holds up against your real constraints.",
+    why: "Unblocking in an hour instead of waiting for the next meeting keeps delivery moving, which is what the client is paying for.",
+    steps: ["State the problem and what you have already ruled out.", "Ask AI for three different framings of the problem, not solutions.", "Test each against your real constraints and discard the ones that fail."],
+    prompt: "I am stuck on this: [describe]. I have already tried [X]. Give me three different ways to frame this problem, and for each, the strongest objection to it.",
+    timebox: "1 hour",
+    skip: null,
+  },
+  {
+    id: "update", title: "Prepping a client update", sub: "Pulling together what to tell the client.",
+    trad: "Managing stakeholders", build: 5,
+    gloss: "Build a status deck covering what is done, what is next, and current risks.",
+    builder: "Draft the update from your raw notes with AI, then spend the saved time on the one decision or recommendation the client needs from you.",
+    why: "Clients value a clear recommendation more than a formatted deck. Less time on formatting, more on the judgement only you can provide.",
+    steps: ["Paste your raw notes, tickets, and metrics.", "Have AI draft the update in your standard format.", "Edit for accuracy, then add the recommendation only you can make."],
+    prompt: "Here are my raw project notes for this week: [paste]. Draft a concise client status update covering progress, next steps, and risks. Leave a clear gap for my recommendation.",
+    timebox: "20 minutes",
+    skip: "This client reads updates closely and values a personal tone. Use AI to draft, but make the final judgement and wording visibly yours.",
+  },
+];
+const triggerById = (id) => TRIGGERS.find((t) => t.id === id);
+const builderToTrigger = { 4: "discovery", 5: "update", 6: "brief", 7: "aifeature", 8: "aifeature", 9: "stuck" };
+
+const APPETITE = [
+  ["conservative", "Conservative", "Wants proven process, wary of new methods."],
+  ["pragmatic", "Pragmatic", "Open to better ways if the value is clear."],
+  ["ambitious", "Ambitious", "Actively wants to push how things are done."],
+];
+
+// ---------- skill maths ----------
+const REPS_PER_LEVEL = 3;
+const LEVEL_NAME = ["Aware", "Practising", "Proficient", "Leading"];
+const skillLevel = (reps) => Math.min(4, Math.floor(reps / REPS_PER_LEVEL));
+const skillProgress = (reps) => (skillLevel(reps) >= 4 ? 1 : (reps % REPS_PER_LEVEL) / REPS_PER_LEVEL);
+function skillLabel(reps) {
+  const l = skillLevel(reps);
+  if (l === 0) return reps > 0 ? "Started" : "Not started";
+  return `Level ${l} · ${LEVEL_NAME[l - 1]}`;
+}
+
+// ---------- indicative user ----------
+const NOMI_SEED = {
+  name: "Nomi",
+  role: "Product Manager",
+  level: 3,
+  weeksActive: 3,
+  skills: { 4: 4, 5: 2, 6: 7, 7: 0, 8: 0, 9: 3 },
+  activity: [
+    { build: 6, trigger: "brief", taken: true, when: "2 weeks ago" },
+    { build: 4, trigger: "discovery", taken: true, when: "9 days ago" },
+    { build: 9, trigger: "stuck", taken: true, when: "5 days ago" },
+    { build: 6, trigger: "brief", taken: false, when: "4 days ago" },
+  ],
+};
+
+function recommendSkill(skills) {
+  const order = [8, 7, 9, 5, 4, 6];
+  return [...COLLECTIBLE].sort((a, b) => (skills[a] - skills[b]) || (order.indexOf(a) - order.indexOf(b)))[0];
+}
+
+// ---------- AI plumbing (real build routes this server-side; offline → canned fallback) ----------
+async function callClaude(system, content) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "claude-opus-4-8", max_tokens: 1000, system, messages: [{ role: "user", content }] }),
+  });
+  const data = await res.json();
+  return (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").replace(/```json/gi, "").replace(/```/g, "").trim();
+}
+
+// ================= APP =================
+function App() {
+  const [tab, setTab] = useState("work");
+  const [nomi, setNomi] = useState(NOMI_SEED);
+  const [openTrigger, setOpenTrigger] = useState(null);
+
+  const addRep = (bid) => setNomi((n) => ({ ...n, skills: { ...n.skills, [bid]: (n.skills[bid] || 0) + 1 } }));
+  const logActivity = (entry) => setNomi((n) => ({ ...n, activity: [{ ...entry, when: "just now" }, ...n.activity] }));
+  const setLevel = (lvl) => setNomi((n) => ({ ...n, level: lvl }));
+
+  function startTrigger(id) { setOpenTrigger(id); setTab("work"); }
+
+  return (
+    <div className="root">
+      <Style />
+      <header className="topbar">
+        <div className="brand"><span className="dot" /> PRODUCT BUILDER</div>
+        <div className="who">
+          <span className="who-name">{nomi.name}</span>
+          <span className="who-meta">Product Manager · Framework level {nomi.level}</span>
+        </div>
+        <nav>
+          <button className={tab === "work" ? "on" : ""} onClick={() => setTab("work")}>Work</button>
+          <button className={tab === "skills" ? "on" : ""} onClick={() => setTab("skills")}>Skills</button>
+        </nav>
+      </header>
+
+      {tab === "work"
+        ? <Work nomi={nomi} addRep={addRep} logActivity={logActivity} setLevel={setLevel}
+            openTrigger={openTrigger} clearOpen={() => setOpenTrigger(null)} goSkills={() => setTab("skills")} />
+        : <Skills nomi={nomi} startTrigger={startTrigger} />}
+
+      <footer className="foot">Prototype · Valtech Product Competency Framework 2024 + Product Builder model v0.1</footer>
+    </div>
+  );
+}
+
+// ---------- WORK ----------
+function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goSkills }) {
+  const [view, setView] = useState("home");
+  const [trigger, setTrigger] = useState(null);
+  const [ctx, setCtx] = useState({ appetite: "pragmatic", phase: "discovery", situation: "" });
+  const [result, setResult] = useState(null);
+  const [fb, setFb] = useState(false);
+  const [shownLevel, setShownLevel] = useState(nomi.level);
+
+  useEffect(() => {
+    if (openTrigger) { setTrigger(openTrigger); setView("setup"); clearOpen(); }
+  }, [openTrigger]);
+
+  const recId = useMemo(() => recommendSkill(nomi.skills), [nomi.skills]);
+  const recTrigger = triggerById(builderToTrigger[recId]);
+
+  async function generate() {
+    setView("gen");
+    setShownLevel(nomi.level);
+    const t = triggerById(trigger);
+    const v = VALTECH[t.trad];
+    const b = BUILDER[t.build];
+    const system =
+      "You are a working tool for product managers at Valtech, a digital product consultancy delivering client work. " +
+      "Given a work trigger, the client's appetite for new ways of working, and the PM's situation, produce two grounded options. " +
+      "The 'traditional' option is the established move from Valtech's competency framework for the relevant competency at the PM's level (provided). The 'builder' option is the AI-native move from the Product Builder model for the provided competency. " +
+      "Be practical and specific. No buzzwords, no selling, no talk of looking modern. Ground the value in client delivery. " +
+      "If the builder move would not serve THIS client given their appetite, set verdict to 'skip-it' and give the honest alternative. " +
+      "Return ONLY JSON: {\"traditional\":string,\"builder\":string,\"competency\":string (one of: " + COLLECTIBLE.map((i) => BUILDER[i].short).join(", ") + "),\"verdict\":\"do-it\"|\"skip-it\",\"whyClientValues\":string,\"skip\":string|null,\"steps\":[3 short strings],\"prompt\":string,\"timebox\":string}. Keep fields tight.";
+    const content =
+      `Trigger: ${t.title}\nClient appetite: ${ctx.appetite}\nDelivery phase: ${ctx.phase}\nSituation: ${ctx.situation || "(not specified)"}\n` +
+      `Relevant Valtech competency: ${t.trad} (${v.theme}). At level ${nomi.level}: ${v.levels[nomi.level - 1]}\n` +
+      `Target builder skill: ${b.short}. ${b.line}`;
+    try {
+      const raw = await callClaude(system, content);
+      const p = JSON.parse(raw);
+      if (!p.builder || !p.competency) throw new Error("bad");
+      setResult(p); setFb(false);
+    } catch (e) {
+      const skip = ctx.appetite === "conservative" && t.skip;
+      setResult({
+        traditional: t.gloss, builder: t.builder, competency: BUILDER[t.build].short,
+        verdict: skip ? "skip-it" : "do-it", whyClientValues: t.why, skip: t.skip,
+        steps: t.steps, prompt: t.prompt, timebox: t.timebox,
+      });
+      setFb(true);
+    }
+    setView("result");
+  }
+
+  function log(taken) {
+    const t = triggerById(trigger);
+    const bid = builderId(result.competency);
+    if (taken) addRep(bid);
+    logActivity({ build: bid, trigger, taken });
+    setView("home"); setTrigger(null); setResult(null);
+    setCtx({ appetite: "pragmatic", phase: "discovery", situation: "" });
+    goSkills();
+  }
+
+  if (view === "home")
+    return (
+      <main className="stage">
+        <p className="eyebrow">What are you working on?</p>
+        <h1 className="hero">Pick the work moment you're at.</h1>
+        <p className="lede">For each one, you'll see what most PMs do and the AI-native alternative, with the steps to do it. Choosing the AI-native option builds the matching skill.</p>
+        <div className="triggers">
+          {TRIGGERS.map((t) => (
+            <button key={t.id} className="trig" onClick={() => { setTrigger(t.id); setView("setup"); }}>
+              <span className="trig-title">{t.title}</span>
+              <span className="trig-sub">{t.sub}</span>
+              <span className="trig-arrow">→</span>
+            </button>
+          ))}
+        </div>
+        <div className="rec" onClick={goSkills}>
+          <span className="rec-l">Recommended next</span>
+          Your least-developed AI skill is {BUILDER[recId].short.toLowerCase()}.
+          {recTrigger ? ` "${recTrigger.title}" would build it.` : ""}
+        </div>
+      </main>
+    );
+
+  if (view === "setup") {
+    const t = triggerById(trigger);
+    return (
+      <main className="stage">
+        <button className="back" onClick={() => setView("home")}>← all moments</button>
+        <p className="eyebrow">{t.title}</p>
+        <h2 className="h2">Some context, so the options fit the situation.</h2>
+
+        <p className="label">How does this client feel about new ways of working?</p>
+        <div className="choices three">
+          {APPETITE.map(([k, tl, d]) => (
+            <button key={k} className={`choice ${ctx.appetite === k ? "sel" : ""}`} onClick={() => setCtx({ ...ctx, appetite: k })}>
+              <span className="choice-t">{tl}</span><span className="choice-d">{d}</span>
+            </button>
+          ))}
+        </div>
+
+        <p className="label">Where are you in delivery?</p>
+        <div className="seg">
+          {["discovery", "definition", "delivery"].map((p) => (
+            <button key={p} className={ctx.phase === p ? "on" : ""} onClick={() => setCtx({ ...ctx, phase: p })}>{p}</button>
+          ))}
+        </div>
+
+        <p className="label">What's the situation? <span className="opt">optional, makes the options sharper</span></p>
+        <textarea className="ta" placeholder="e.g. retail client, brief is vague about what 'AI-powered search' should do" value={ctx.situation} onChange={(e) => setCtx({ ...ctx, situation: e.target.value })} />
+
+        <button className="primary" onClick={generate}>Show the two options</button>
+      </main>
+    );
+  }
+
+  if (view === "gen")
+    return <main className="stage center"><div className="spinner" /><p className="eyebrow">One moment</p><h2 className="h2">Putting together the two options for this situation.</h2></main>;
+
+  const t = triggerById(trigger);
+  const v = VALTECH[t.trad];
+  const skip = result.verdict === "skip-it";
+  const bid = builderId(result.competency);
+  const b = BUILDER[bid];
+  const reps = nomi.skills[bid] || 0;
+
+  return (
+    <main className="stage wide">
+      <button className="back" onClick={() => setView("setup")}>← change context</button>
+      {fb && <p className="fb">Offline mode: showing the built-in options (live AI generation runs server-side in the real build).</p>}
+
+      {skip && (
+        <div className="verdict-skip">
+          <span className="vs-tag">Not worth it for this client</span>
+          <p>{result.skip || "The AI-native move would not serve this client right now."}</p>
+        </div>
+      )}
+
+      <div className={`fork ${skip ? "muted-builder" : ""}`}>
+        <div className="path old">
+          <span className="path-l">What most PMs do</span>
+          <p className="path-action">{result.traditional}</p>
+          <div className="src">
+            <span className="src-l">Valtech framework · {v.theme}</span>
+            <span className="src-name">{t.trad}</span>
+            <div className="lvl-row">
+              <span>at level</span>
+              {[1, 2, 3, 4, 5].map((l) => (
+                <button key={l} className={`lvl-pip ${shownLevel === l ? "on" : ""}`} onClick={() => setShownLevel(l)}>{l}</button>
+              ))}
+            </div>
+            <p className="src-stmt">{v.levels[shownLevel - 1]}</p>
+          </div>
+        </div>
+
+        <div className="fork-arrow">→</div>
+
+        <div className="path builder">
+          <span className="path-l">The AI-native approach</span>
+          <p className="path-action">{result.builder}</p>
+          <div className="src">
+            <span className="src-l">Product Builder model · {TIER_NAME[b.tier]}</span>
+            <span className="src-name">{b.short}</span>
+            <p className="skill-now">Your level here: <b>{skillLabel(reps)}</b>{!skip && <span className="skill-gain"> · taking this adds a rep</span>}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="why">
+        <span className="why-l">Why it's worth doing for the client</span>
+        <p>{result.whyClientValues}</p>
+      </div>
+
+      {!skip && (
+        <section className="move">
+          <div className="move-head">
+            <p className="eyebrow nm">How to do it</p>
+            <span className="timebox">{result.timebox}</span>
+          </div>
+          <ol className="steps">{(result.steps || []).map((s, i) => <li key={i}>{s}</li>)}</ol>
+          <PromptBox text={result.prompt} />
+        </section>
+      )}
+
+      <div className="actions">
+        <button className="primary" onClick={() => log(true)}>{skip ? "Did the standard move" : "Log as done"}</button>
+        <button className="ghost" onClick={() => log(false)}>Skip this time</button>
+      </div>
+    </main>
+  );
+}
+
+function PromptBox({ text }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try { await navigator.clipboard.writeText(text); } catch (e) {}
+    setCopied(true); setTimeout(() => setCopied(false), 1600);
+  }
+  return (
+    <div className="promptbox">
+      <div className="pb-head"><span>Prompt to start from</span><button onClick={copy}>{copied ? "Copied" : "Copy"}</button></div>
+      <code>{text}</code>
+    </div>
+  );
+}
+
+// ---------- SKILLS ----------
+function Ring({ reps, accent }) {
+  const C = 2 * Math.PI * 19;
+  const p = skillProgress(reps);
+  const lvl = skillLevel(reps);
+  return (
+    <svg width="46" height="46" viewBox="0 0 46 46" className="ring">
+      <circle cx="23" cy="23" r="19" fill="none" stroke="var(--line)" strokeWidth="4" />
+      <circle cx="23" cy="23" r="19" fill="none" stroke={accent} strokeWidth="4" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={C * (1 - p)} transform="rotate(-90 23 23)" />
+      <text x="23" y="23" textAnchor="middle" dominantBaseline="central" className="ring-n">{lvl}</text>
+    </svg>
+  );
+}
+
+function Skills({ nomi, startTrigger }) {
+  const recId = recommendSkill(nomi.skills);
+  const recTrigger = triggerById(builderToTrigger[recId]);
+  const started = COLLECTIBLE.filter((id) => (nomi.skills[id] || 0) > 0).length;
+  const accentFor = () => "var(--builder)";
+
+  const SkillCard = ({ id }) => {
+    const s = BUILDER[id];
+    const reps = nomi.skills[id] || 0;
+    const isRec = id === recId;
+    return (
+      <div className={`skill ${reps > 0 ? "begun" : ""} ${isRec ? "rec-skill" : ""}`}>
+        <Ring reps={reps} accent={accentFor()} />
+        <div className="skill-body">
+          <span className="skill-name">{s.short}{isRec && <span className="rec-pip">next</span>}</span>
+          <span className="skill-line">{s.line}</span>
+          <span className="skill-lvl">{skillLabel(reps)}{reps > 0 && skillLevel(reps) < 4 ? ` · ${reps % REPS_PER_LEVEL}/${REPS_PER_LEVEL} to next` : ""}</span>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <main className="stage wide">
+      <p className="eyebrow">Skills</p>
+      <h1 className="h1">{nomi.name}'s AI-native skills</h1>
+      <p className="lede">Each AI-native approach you take adds to a skill. Skills move up a level every {REPS_PER_LEVEL} reps. This is what a chat window can't give you: progress that builds across weeks of real work.</p>
+
+      <div className="profile">
+        <div className="prof-stat"><span className="ps-n">{started}/{COLLECTIBLE.length}</span><span className="ps-l">skills started</span></div>
+        <div className="prof-stat"><span className="ps-n">{nomi.activity.filter((a) => a.taken).length}</span><span className="ps-l">moves taken</span></div>
+        <div className="prof-stat"><span className="ps-n">{nomi.weeksActive}</span><span className="ps-l">weeks active</span></div>
+      </div>
+
+      <div className="next" onClick={() => recTrigger && startTrigger(recTrigger.id)}>
+        <div>
+          <span className="next-l">Build next</span>
+          <p className="next-name">{BUILDER[recId].short}</p>
+          <p className="next-why">Your least-developed skill. {recTrigger ? `Start from "${recTrigger.title}".` : ""}</p>
+        </div>
+        <span className="next-go">Start →</span>
+      </div>
+
+      <p className="unit-h">Shifted practices</p>
+      <div className="skill-grid">{[4, 5].map((id) => <SkillCard key={id} id={id} />)}</div>
+
+      <p className="unit-h">New capabilities</p>
+      <div className="skill-grid">{[6, 7, 8, 9].map((id) => <SkillCard key={id} id={id} />)}</div>
+
+      <p className="unit-h">Foundations <span className="unit-note">established, tracked in the Valtech framework</span></p>
+      <div className="found">
+        {[1, 2, 3].map((id) => <span key={id} className="found-chip">{BUILDER[id].short}</span>)}
+      </div>
+
+      <p className="unit-h">Recent activity</p>
+      <div className="log">
+        {nomi.activity.map((a, i) => {
+          const t = triggerById(a.trigger);
+          return (
+            <div key={i} className="logrow">
+              <span className={`logdot ${a.taken ? "ok" : "skip"}`} />
+              <span className="log-when">{a.when}</span>
+              <span className="log-trig">{t ? t.title : a.trigger}</span>
+              <span className="log-comp">{BUILDER[a.build].short}</span>
+              <span className={`log-status ${a.taken ? "ok" : "skip"}`}>{a.taken ? "took it" : "skipped"}</span>
+            </div>
+          );
+        })}
+      </div>
+    </main>
+  );
+}
+
+function Style() {
+  return (
+    <style>{`
+    /* Valtech identity: tokens + fonts come from valtech.css. This maps the
+       prototype's variables onto the Valtech design system. */
+    :root{
+      --ink:var(--vt-ink); --paper:var(--vt-paper); --card:var(--vt-white);
+      --line:var(--vt-sage-mid); --mut:var(--vt-graphite);
+      --builder:var(--vt-coral); --builder-soft:#FCE7E2;
+      --old:var(--vt-slate); --skip:var(--vt-berry); --good:var(--vt-forest);
+      --mono:var(--vt-body); --sans:var(--vt-body); --head:var(--vt-head);
+    }
+    *{box-sizing:border-box}
+    .root{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased}
+    button{font-family:var(--sans);cursor:pointer;border:none;background:none;color:inherit}
+    textarea{font-family:var(--sans)}
+
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 26px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+    .brand{font-family:var(--head);font-weight:300;letter-spacing:.14em;font-size:15px;display:flex;align-items:center;gap:9px}
+    .brand .dot{width:9px;height:9px;background:var(--builder);border-radius:50%}
+    .who{display:flex;flex-direction:column;line-height:1.2;margin-left:auto;margin-right:8px;text-align:right}
+    .who-name{font-weight:500;font-size:13px}
+    .who-meta{font-size:10px;color:var(--mut);letter-spacing:.04em;text-transform:uppercase}
+    .topbar nav{display:flex;gap:4px}
+    .topbar nav button{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;padding:7px 13px;border:1px solid transparent;color:var(--mut)}
+    .topbar nav button.on{color:var(--ink);border-color:var(--ink)}
+
+    .stage{max-width:660px;margin:0 auto;padding:44px 26px 80px}
+    .stage.wide{max-width:820px}
+    .stage.center{text-align:center;padding-top:120px}
+
+    .eyebrow{font-weight:600;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--builder);margin:0 0 16px}
+    .eyebrow.nm{margin:0}
+    .hero{font-family:var(--head);font-size:clamp(30px,5vw,44px);font-weight:300;line-height:1.05;letter-spacing:-.01em;margin:0 0 18px}
+    .h1{font-family:var(--head);font-size:clamp(26px,4.5vw,36px);font-weight:300;letter-spacing:-.01em;line-height:1.08;margin:0 0 14px}
+    .h2{font-family:var(--head);font-size:24px;font-weight:400;letter-spacing:0;margin:0 0 22px}
+    .lede{font-size:16px;color:var(--mut);max-width:60ch;margin:0 0 28px}
+
+    .back{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:22px;padding:0}
+    .back:hover{color:var(--ink)}
+
+    .triggers{display:flex;flex-direction:column;gap:9px}
+    .trig{position:relative;text-align:left;border:1px solid var(--line);background:var(--card);padding:17px 20px;display:flex;flex-direction:column;gap:3px;transition:border-color .12s,transform .08s}
+    .trig:hover{border-color:var(--builder);transform:translateX(2px)}
+    .trig-title{font-family:var(--head);font-weight:400;font-size:18px}
+    .trig-sub{font-size:13px;color:var(--mut)}
+    .trig-arrow{position:absolute;right:20px;top:50%;transform:translateY(-50%);color:var(--builder);font-size:18px;opacity:0;transition:opacity .12s}
+    .trig:hover .trig-arrow{opacity:1}
+
+    .rec{margin-top:28px;border:1px solid var(--line);border-left:3px solid var(--builder);padding:14px 18px;font-size:14px;color:var(--ink);cursor:pointer;background:var(--card)}
+    .rec-l{display:block;font-weight:600;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--builder);margin-bottom:6px}
+
+    .label{font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:26px 0 12px}
+    .label .opt{text-transform:none;letter-spacing:0;font-style:italic;font-weight:400;margin-left:8px}
+    .choices.three{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+    .choice{text-align:left;border:1px solid var(--line);padding:13px 15px;background:var(--card);display:flex;flex-direction:column;gap:3px}
+    .choice:hover{border-color:var(--mut)}
+    .choice.sel{border-color:var(--builder);box-shadow:inset 0 0 0 1px var(--builder)}
+    .choice-t{font-weight:500;font-size:14px}
+    .choice-d{font-size:11.5px;color:var(--mut);line-height:1.35}
+
+    .seg{display:inline-flex;border:1px solid var(--line);overflow:hidden}
+    .seg button{font-size:12px;letter-spacing:.04em;padding:9px 16px;color:var(--mut);border-right:1px solid var(--line);text-transform:capitalize}
+    .seg button:last-child{border-right:none}
+    .seg button.on{background:var(--ink);color:var(--paper)}
+
+    .ta{width:100%;min-height:78px;border:1px solid var(--line);padding:12px 14px;font-size:14.5px;background:var(--card);color:var(--ink);resize:vertical;margin-bottom:6px}
+    .ta:focus{outline:none;border-color:var(--builder)}
+    .ta::placeholder{color:var(--vt-sage-mid)}
+
+    .primary{background:var(--ink);color:var(--paper);font-weight:500;font-size:15px;padding:13px 26px;transition:transform .08s;margin-top:28px}
+    .primary:hover{transform:translateY(-1px)}
+    .ghost{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);padding:13px 18px;border:1px solid var(--line);margin-top:28px}
+    .ghost:hover{color:var(--ink);border-color:var(--ink)}
+
+    .spinner{width:34px;height:34px;border:2px solid var(--line);border-top-color:var(--builder);border-radius:50%;margin:0 auto 24px;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .fb{font-size:11px;color:var(--mut);margin:0 0 18px;font-style:italic}
+
+    .verdict-skip{background:#FBEFD9;border:1px solid #E3CE9B;padding:18px 20px;margin-bottom:26px}
+    .vs-tag{display:inline-block;font-weight:600;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--skip);border:1px solid var(--skip);padding:3px 8px;margin-bottom:10px}
+    .verdict-skip p{margin:0;font-size:15px;color:var(--ink)}
+
+    .fork{display:grid;grid-template-columns:1fr 30px 1fr;align-items:stretch;margin-bottom:26px}
+    .fork.muted-builder .builder{opacity:.55}
+    .path{border:1px solid var(--line);padding:18px;background:var(--card)}
+    .path.old{opacity:.94}
+    .path-l{display:block;font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:10px}
+    .path.builder .path-l{color:var(--builder)}
+    .path.builder{border-color:var(--builder);box-shadow:inset 0 0 0 1px var(--builder);background:#fff}
+    .path-action{margin:0 0 14px;font-size:15px;line-height:1.45}
+    .path.old .path-action{color:var(--mut)}
+    .path.builder .path-action{font-weight:500}
+    .src{border-top:1px solid var(--line);padding-top:11px}
+    .src-l{display:block;font-weight:600;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:3px}
+    .src-name{display:block;font-weight:500;font-size:12.5px;margin-bottom:8px}
+    .lvl-row{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px}
+    .lvl-pip{width:21px;height:21px;border:1px solid var(--line);font-size:11px;color:var(--mut)}
+    .lvl-pip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+    .src-stmt{margin:0;font-size:12.5px;color:var(--mut);line-height:1.45}
+    .skill-now{margin:0;font-size:12.5px;color:var(--ink)}
+    .skill-gain{color:var(--builder)}
+    .fork-arrow{display:flex;align-items:center;justify-content:center;color:var(--builder);font-size:20px}
+
+    .why{border-left:2px solid var(--builder);padding:4px 0 4px 16px;margin-bottom:28px}
+    .why-l{display:block;font-weight:600;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--builder);margin-bottom:6px}
+    .why p{margin:0;font-size:14.5px;color:var(--ink)}
+
+    .move{border-top:1px solid var(--line);padding-top:22px}
+    .move-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .timebox{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);border:1px solid var(--line);padding:4px 10px}
+    .steps{margin:0 0 20px;padding-left:0;list-style:none;counter-reset:s}
+    .steps li{counter-increment:s;position:relative;padding:0 0 12px 34px;font-size:14.5px}
+    .steps li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:0;font-weight:600;font-size:12px;color:var(--builder)}
+    .promptbox{border:1px solid var(--line);background:var(--ink);overflow:hidden}
+    .pb-head{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid #2e3034}
+    .pb-head span{font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#8a8d92}
+    .pb-head button{font-size:11px;color:#fff;border:1px solid #3a3d42;padding:4px 11px}
+    .promptbox code{display:block;padding:14px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.6;color:#dfe1e4;white-space:pre-wrap}
+
+    .actions{display:flex;gap:10px;align-items:center}
+    .actions .primary,.actions .ghost{margin-top:28px}
+
+    .profile{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 26px}
+    .prof-stat{border:1px solid var(--line);background:var(--card);padding:14px 16px;display:flex;flex-direction:column;gap:3px}
+    .ps-n{font-family:var(--head);font-size:28px;font-weight:300}
+    .ps-l{font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+
+    .next{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--builder);background:var(--builder-soft);padding:16px 20px;cursor:pointer;margin-bottom:32px}
+    .next-l{font-weight:600;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--builder)}
+    .next-name{font-family:var(--head);font-weight:400;font-size:20px;margin:5px 0 3px}
+    .next-why{margin:0;font-size:13.5px;color:var(--ink)}
+    .next-go{font-size:13px;color:var(--builder);white-space:nowrap;font-weight:500}
+
+    .unit-h{font-weight:600;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);border-top:1px solid var(--line);padding-top:14px;margin:34px 0 14px}
+    .unit-note{text-transform:none;letter-spacing:0;color:var(--mut);font-weight:400;margin-left:8px}
+    .skill-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    .skill{display:flex;gap:14px;align-items:flex-start;border:1px solid var(--line);background:var(--card);padding:15px 16px}
+    .skill.begun{background:#fff}
+    .skill.rec-skill{border-color:var(--builder);box-shadow:inset 0 0 0 1px var(--builder)}
+    .ring{flex-shrink:0}
+    .ring-n{font-family:var(--head);font-size:15px;font-weight:400;fill:var(--ink)}
+    .skill-body{display:flex;flex-direction:column;gap:3px;min-width:0}
+    .skill-name{font-weight:500;font-size:14.5px;display:flex;align-items:center;gap:7px}
+    .rec-pip{font-weight:600;font-size:9px;letter-spacing:.08em;text-transform:uppercase;background:var(--builder);color:#fff;padding:2px 6px}
+    .skill-line{font-size:12px;color:var(--mut);line-height:1.35}
+    .skill-lvl{font-size:11px;color:var(--builder);margin-top:3px}
+
+    .found{display:flex;flex-wrap:wrap;gap:8px}
+    .found-chip{font-size:11.5px;color:var(--mut);border:1px dashed var(--line);padding:7px 11px}
+
+    .log{display:flex;flex-direction:column}
+    .logrow{display:grid;grid-template-columns:14px 90px 1fr auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+    .logdot{width:9px;height:9px;border-radius:50%}
+    .logdot.ok{background:var(--good)} .logdot.skip{background:var(--line);border:1px solid var(--mut)}
+    .log-when{font-size:11px;color:var(--mut)}
+    .log-trig{font-weight:500}
+    .log-comp{font-size:11px;color:var(--mut)}
+    .log-status{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+    .log-status.ok{color:var(--good)} .log-status.skip{color:var(--mut)}
+
+    .foot{text-align:center;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);padding:24px;border-top:1px solid var(--line)}
+
+    @media(max-width:640px){
+      .who{display:none}
+      .choices.three{grid-template-columns:1fr}
+      .fork{grid-template-columns:1fr}
+      .fork-arrow{transform:rotate(90deg);padding:6px 0}
+      .profile{grid-template-columns:1fr 1fr}
+      .skill-grid{grid-template-columns:1fr}
+      .logrow{grid-template-columns:14px 1fr auto;row-gap:4px}
+      .log-comp,.log-when{grid-column:2/4}
+      .stage{padding:32px 18px 64px}
+    }
+    `}</style>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
