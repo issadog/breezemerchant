@@ -63,13 +63,29 @@ the product's behaviour with no code change.
 Structured inputs only — no free-form chat.
 
 1. **Client context URL** — a job posting, careers page, or public ways-of-working write-up.
-   Fetched live, server-side.
-2. **Engagement type** — select (e.g. greenfield build / legacy modernization / advisory).
-3. **Project phase** — select (e.g. Discovery / Delivery / Scaling).
+   Fetched live, server-side. (Falls back to pasted text — see §6.)
+2. **Engagement type** — select: greenfield build / legacy modernization / advisory.
+3. **Project phase** — select: Discovery / Delivery / Scaling.
+4. **Client posture toward "builders" / AI-PMs** — select: conservative / pragmatic /
+   forward-thinking. Captures intel the page can't always reveal — how receptive the client
+   is to the Product Builder shift.
+5. **The PM's own competency level** — a self-rating against the four Valtech competency
+   themes (Vision & strategy / Discovery / Execution / Consulting), each: developing /
+   proficient / advanced.
 
-Engagement type and phase **modulate which dimensions are relevant** and how each move is
-framed (e.g. "Spec → Build" in Discovery means *prototype to learn*; in Delivery it means
-*ship working artifacts, not docs*).
+How the inputs shape the briefing:
+- **Engagement type and phase** modulate *which* dimensions are relevant and how each move is
+  framed (e.g. "Spec → Build" in Discovery means *prototype to learn*; in Delivery it means
+  *ship working artifacts, not docs*).
+- **Client posture** is a strategic dial — *how hard to push*. It rewrites the "how to play
+  it" guidance per dimension and the closing read (don't evangelise AI at a conservative
+  client; lead with the boldest version at a forward-thinking one).
+- **Competency level** is a developmental dial — *how much to stretch the PM*. Each dimension
+  anchors to one competency theme and tunes its skill move to that theme's rating (scaffold
+  the habit when developing; apply directly when proficient; lead/stretch when advanced).
+- **Consulting** is cross-cutting: because it is the framework's "Modelling & coaching best
+  practice" theme, it governs a coaching overlay across *all* dimensions — advanced adds a
+  "coach the client team" layer to each move; developing flips it to "do it yourself first."
 
 ---
 
@@ -81,11 +97,16 @@ A structured briefing, rendered from strict JSON. **Not a chat.**
   (e.g. *"Genuine AI maturity in delivery, hype in discovery — here's where to focus."*).
 - **Per relevant shift dimension** — only the **2–3 dimensions that matter** for this
   engagement + phase, ranked by relevance (focus over completeness):
+  - **Anchor theme** — the single Valtech competency theme this dimension evolves from
+    (Vision / Discovery / Execution / Consulting); drives which competency rating tunes it.
   - **The signal** — what this client's real text says (quoted), placed on the dimension.
   - **Hype to discount** — the breeze-merchant version, and why it doesn't apply here.
+  - **How to play it** — guidance tuned to the client's posture (conservative / pragmatic /
+    forward-thinking).
   - **Your baseline** — the relevant Valtech competency ("today" expectation).
   - **Your moves** — one **mindset shift** + one **concrete skill** to practise, specific
-    to this phase.
+    to this phase. The skill move's depth is tuned to the PM's rating on the dimension's
+    anchor theme, and gains a coaching layer when the PM's Consulting rating is advanced.
 - **Footer — the breezemerchant read** — the meta hype-resistance summary: where this client
   is real vs. noise, so the PM walks in clear-eyed.
 
@@ -99,6 +120,13 @@ Single deployable web app, minimal moving parts.
 
 **Stack:** Next.js (React UI + API routes in one repo). Keeps the Claude API key server-side;
 lowest-friction to scaffold and run in a day.
+
+**Styling:** the Valtech design system. `valtech.css` (repo root) is the untouched base —
+design tokens (`--vt-*`), embedded brand fonts (Valtech Neue, Sons), and primitives. A thin
+`breezemerchant.css` layer builds the app's components (controls, signal/hype callouts, move
+cards) entirely from `--vt-*` tokens — no hardcoded colours. Both files load together; the
+prototype and the shipped app use the identical pair, so they stay visually consistent.
+Default to the light "paper" theme (coral accent).
 
 **Components / flow:**
 1. **Input form** (client component) — URL field + two selects. Validates, posts to the API.
@@ -141,6 +169,12 @@ verification covers a one-day build.
 
 ## 8. Open decisions deferred to planning
 
-- Exact option lists for engagement type and phase selects.
 - The precise JSON briefing schema (field names, dimension ranking representation).
 - Extraction library choice (Readability vs cheerio vs a simple combination).
+
+Resolved during prototyping (now reflected in the plan):
+- Option lists: engagement (greenfield / modernization / advisory), phase (discovery /
+  delivery / scaling), posture (conservative / pragmatic / forward-thinking), competency
+  level (developing / proficient / advanced) across four themes.
+- Competency input granularity: **per-theme** self-rating (not a single overall band).
+- Styling: Valtech design system via `valtech.css` + `breezemerchant.css`.

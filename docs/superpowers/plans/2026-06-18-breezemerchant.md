@@ -34,9 +34,15 @@ blocked at the finish line — have a key ready before Task 8.
 - **API key** must stay server-side. Read from `process.env.ANTHROPIC_API_KEY`; never expose to the client bundle.
 - **Engagement types** (exact option values): `greenfield` ("Greenfield build"), `modernization` ("Legacy modernization"), `advisory` ("Advisory").
 - **Project phases** (exact option values): `discovery` ("Discovery"), `delivery` ("Delivery"), `scaling` ("Scaling").
+- **Client posture** (exact option values): `conservative` ("Conservative"), `pragmatic` ("Pragmatic"), `forward` ("Forward-thinking"). Strategic dial — how hard to push the builder/AI-PM agenda.
+- **Competency themes** (the four Valtech themes, exact keys): `vision` ("Vision & strategy"), `discovery` ("Discovery"), `execution` ("Execution"), `consulting` ("Consulting").
+- **Competency levels** (exact option values, per theme): `developing` ("Developing"), `proficient` ("Proficient"), `advanced` ("Advanced"). Developmental dial — how much to stretch the PM.
 - **POV framework file:** `docs/pov/pm-role-shift-framework.md` (already exists). Loaded at request time; editing it changes behavior with no code change.
 - **The briefing surfaces only the 2–3 most relevant shift dimensions** for the chosen engagement + phase — focus over completeness.
+- **Each dimension anchors to exactly one competency theme** (`vision` | `discovery` | `execution` | `consulting`); its skill move is tuned to the PM's rating on that theme.
 - Each recommended move has two parts: a **mindset shift** and a **concrete skill**.
+- **Consulting is cross-cutting:** when the PM's `consulting` rating is `advanced`, every move gains a coaching layer ("coach the client team"); when `developing`, it flips to "do it yourself first."
+- **Styling:** load `valtech.css` (repo root — design tokens + embedded fonts, untouched) then `breezemerchant.css` (app component layer, built only from `--vt-*` tokens). Light "paper" theme, coral accent. No hardcoded colours in app styles.
 
 ---
 
@@ -145,31 +151,22 @@ node_modules/
 next-env.d.ts
 ```
 
-- [ ] **Step 7: Create `app/globals.css`**
+- [ ] **Step 7: Bring the Valtech stylesheets into the app**
 
-```css
-:root {
-  --bg: #0f1115;
-  --panel: #171a21;
-  --ink: #e8eaed;
-  --muted: #9aa0aa;
-  --accent: #d98b5f;
-  --line: #2a2e37;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  line-height: 1.5;
-}
-```
+`valtech.css` and `breezemerchant.css` already live at the repo root. Copy them into the app's
+styles folder so Next.js can import them (Next global CSS must be imported from within the app):
+
+Run: `mkdir -p app/styles && cp valtech.css breezemerchant.css app/styles/`
+Expected: both files present in `app/styles/`.
+
+(`valtech.css` is the untouched design-system base — tokens + embedded fonts. `breezemerchant.css`
+is the app layer built from `--vt-*` tokens. Do not add a separate theme file; these two are the styling.)
 
 - [ ] **Step 8: Create `app/layout.tsx`**
 
 ```tsx
-import "./globals.css";
+import "./styles/valtech.css";
+import "./styles/breezemerchant.css";
 import type { ReactNode } from "react";
 
 export const metadata = {
@@ -216,24 +213,38 @@ git commit -m "chore: scaffold Next.js app"
 
 **Interfaces:**
 - Produces:
-  - `ENGAGEMENT_TYPES: readonly {value: string; label: string}[]` and `PHASES: readonly {value: string; label: string}[]`
-  - `BriefingSchema` (zod) and `type Briefing = z.infer<typeof BriefingSchema>`
-  - `AnalyzeInputSchema` (zod) with fields `{ text: string; engagement: string; phase: string }`
+  - `ENGAGEMENT_TYPES`, `PHASES`, `POSTURES`, `COMPETENCY_LEVELS`, `COMPETENCY_THEMES`: each `readonly {value: string; label: string}[]`
+  - `BriefingSchema` (zod) and `type Briefing = z.infer<typeof BriefingSchema>` — dimensions carry `anchorTheme`, `howToPlay`, and a nullable `coachingNote`
+  - `AnalyzeInputSchema` (zod) with fields `{ text, engagement, phase, posture, competency }` where `competency` is `{ vision, discovery, execution, consulting }` of level values; and `type AnalyzeInput`
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { BriefingSchema, AnalyzeInputSchema, ENGAGEMENT_TYPES, PHASES } from "./schema";
+import {
+  BriefingSchema,
+  AnalyzeInputSchema,
+  ENGAGEMENT_TYPES,
+  PHASES,
+  POSTURES,
+  COMPETENCY_LEVELS,
+  COMPETENCY_THEMES,
+} from "./schema";
+
+const validCompetency = {
+  vision: "proficient",
+  discovery: "developing",
+  execution: "advanced",
+  consulting: "proficient",
+};
 
 describe("schema", () => {
-  it("exposes the fixed engagement and phase options", () => {
-    expect(ENGAGEMENT_TYPES.map((o) => o.value)).toEqual([
-      "greenfield",
-      "modernization",
-      "advisory",
-    ]);
+  it("exposes the fixed option lists", () => {
+    expect(ENGAGEMENT_TYPES.map((o) => o.value)).toEqual(["greenfield", "modernization", "advisory"]);
     expect(PHASES.map((o) => o.value)).toEqual(["discovery", "delivery", "scaling"]);
+    expect(POSTURES.map((o) => o.value)).toEqual(["conservative", "pragmatic", "forward"]);
+    expect(COMPETENCY_LEVELS.map((o) => o.value)).toEqual(["developing", "proficient", "advanced"]);
+    expect(COMPETENCY_THEMES.map((o) => o.value)).toEqual(["vision", "discovery", "execution", "consulting"]);
   });
 
   it("validates a well-formed briefing", () => {
@@ -243,11 +254,14 @@ describe("schema", () => {
       dimensions: [
         {
           name: "Discovery → Sensing",
+          anchorTheme: "discovery",
           signal: "They mention weekly user interviews.",
           hypeToDiscount: "Generic 'data-driven' claims.",
+          howToPlay: "Anchor the AI assist to a number they trust.",
           baselineCompetency: "Using qualitative data",
           mindsetMove: "Treat discovery as continuous.",
           skillMove: "Set up an AI-assisted signal digest.",
+          coachingNote: "Hand the digest method to their team to own.",
         },
       ],
       breezemerchantRead: "Mostly real; watch the discovery theatre.",
@@ -255,23 +269,58 @@ describe("schema", () => {
     expect(() => BriefingSchema.parse(briefing)).not.toThrow();
   });
 
-  it("rejects a briefing with zero dimensions", () => {
+  it("allows a null coachingNote and rejects an unknown anchorTheme", () => {
+    const base = {
+      name: "Spec → Build",
+      anchorTheme: "execution",
+      signal: "s",
+      hypeToDiscount: "h",
+      howToPlay: "p",
+      baselineCompetency: "Articulating requirements",
+      mindsetMove: "m",
+      skillMove: "k",
+      coachingNote: null,
+    };
+    const ok = { clientName: "A", oneLineRead: "x", dimensions: [base], breezemerchantRead: "y" };
+    expect(() => BriefingSchema.parse(ok)).not.toThrow();
     expect(() =>
-      BriefingSchema.parse({
-        clientName: "Acme",
-        oneLineRead: "x",
-        dimensions: [],
-        breezemerchantRead: "y",
-      }),
+      BriefingSchema.parse({ ...ok, dimensions: [{ ...base, anchorTheme: "marketing" }] }),
     ).toThrow();
   });
 
-  it("validates analyze input and rejects empty text", () => {
+  it("rejects a briefing with zero dimensions", () => {
     expect(() =>
-      AnalyzeInputSchema.parse({ text: "hello world", engagement: "greenfield", phase: "discovery" }),
+      BriefingSchema.parse({ clientName: "Acme", oneLineRead: "x", dimensions: [], breezemerchantRead: "y" }),
+    ).toThrow();
+  });
+
+  it("validates analyze input and rejects empty text or bad competency", () => {
+    expect(() =>
+      AnalyzeInputSchema.parse({
+        text: "hello world",
+        engagement: "greenfield",
+        phase: "discovery",
+        posture: "pragmatic",
+        competency: validCompetency,
+      }),
     ).not.toThrow();
     expect(() =>
-      AnalyzeInputSchema.parse({ text: "", engagement: "greenfield", phase: "discovery" }),
+      AnalyzeInputSchema.parse({
+        text: "",
+        engagement: "greenfield",
+        phase: "discovery",
+        posture: "pragmatic",
+        competency: validCompetency,
+      }),
+    ).toThrow();
+    expect(() =>
+      AnalyzeInputSchema.parse({
+        text: "ok",
+        engagement: "greenfield",
+        phase: "discovery",
+        posture: "pragmatic",
+        competency: { ...validCompetency, vision: "expert" },
+      }),
     ).toThrow();
   });
 });
@@ -299,22 +348,66 @@ export const PHASES = [
   { value: "scaling", label: "Scaling" },
 ] as const;
 
-const engagementValues = ENGAGEMENT_TYPES.map((o) => o.value) as [string, ...string[]];
-const phaseValues = PHASES.map((o) => o.value) as [string, ...string[]];
+export const POSTURES = [
+  { value: "conservative", label: "Conservative" },
+  { value: "pragmatic", label: "Pragmatic" },
+  { value: "forward", label: "Forward-thinking" },
+] as const;
+
+export const COMPETENCY_LEVELS = [
+  { value: "developing", label: "Developing" },
+  { value: "proficient", label: "Proficient" },
+  { value: "advanced", label: "Advanced" },
+] as const;
+
+export const COMPETENCY_THEMES = [
+  { value: "vision", label: "Vision & strategy" },
+  { value: "discovery", label: "Discovery" },
+  { value: "execution", label: "Execution" },
+  { value: "consulting", label: "Consulting" },
+] as const;
+
+const values = (opts: readonly { value: string }[]) =>
+  opts.map((o) => o.value) as [string, ...string[]];
+
+const engagementValues = values(ENGAGEMENT_TYPES);
+const phaseValues = values(PHASES);
+const postureValues = values(POSTURES);
+const levelEnum = z.enum(values(COMPETENCY_LEVELS));
+const themeEnum = z.enum(values(COMPETENCY_THEMES));
+
+export const CompetencySchema = z.object({
+  vision: levelEnum,
+  discovery: levelEnum,
+  execution: levelEnum,
+  consulting: levelEnum,
+});
 
 export const DimensionSchema = z.object({
   name: z.string().describe("The shift dimension name, e.g. 'Discovery → Sensing'."),
+  anchorTheme: themeEnum.describe("The single Valtech competency theme this dimension evolves from."),
   signal: z
     .string()
     .describe("What this client's real text signals on this dimension; quote where possible."),
   hypeToDiscount: z
     .string()
     .describe("The breeze-merchant version of this dimension, and why it does not apply here."),
+  howToPlay: z
+    .string()
+    .describe("Guidance tuned to the client's posture — how hard to push the builder agenda here."),
   baselineCompetency: z
     .string()
     .describe("The relevant Valtech 'today' competency this evolves from."),
   mindsetMove: z.string().describe("One mindset shift for this PM in this phase."),
-  skillMove: z.string().describe("One concrete skill to practise in this phase."),
+  skillMove: z
+    .string()
+    .describe("One concrete skill to practise, tuned to the PM's level on this dimension's anchor theme."),
+  coachingNote: z
+    .string()
+    .nullable()
+    .describe(
+      "Coaching layer: present (a 'coach the client team' action) when the PM's consulting level is advanced; null otherwise.",
+    ),
 });
 
 export const BriefingSchema = z.object({
@@ -327,15 +420,18 @@ export const BriefingSchema = z.object({
     .describe("Only the 2-3 dimensions that matter most for this engagement and phase."),
   breezemerchantRead: z
     .string()
-    .describe("Meta hype-resistance summary: where this client is real vs noise."),
+    .describe("Meta hype-resistance summary: where this client is real vs noise, tuned to posture."),
 });
 
 export type Briefing = z.infer<typeof BriefingSchema>;
+export type Competency = z.infer<typeof CompetencySchema>;
 
 export const AnalyzeInputSchema = z.object({
   text: z.string().min(1),
   engagement: z.enum(engagementValues),
   phase: z.enum(phaseValues),
+  posture: z.enum(postureValues),
+  competency: CompetencySchema,
 });
 
 export type AnalyzeInput = z.infer<typeof AnalyzeInputSchema>;
@@ -557,17 +653,38 @@ git commit -m "feat: load the authored POV framework at request time"
 import { describe, it, expect } from "vitest";
 import { buildPrompt } from "./analyze";
 
+const input = {
+  text: "We run weekly agent-evals against our PDLC.",
+  engagement: "modernization" as const,
+  phase: "delivery" as const,
+  posture: "forward" as const,
+  competency: {
+    vision: "proficient" as const,
+    discovery: "developing" as const,
+    execution: "advanced" as const,
+    consulting: "advanced" as const,
+  },
+};
+
 describe("buildPrompt", () => {
-  it("embeds the POV, the engagement label, the phase label, and the client text", () => {
-    const { system, user } = buildPrompt(
-      { text: "We run weekly agent-evals against our PDLC.", engagement: "modernization", phase: "delivery" },
-      "POV-FRAMEWORK-CONTENTS",
-    );
+  it("embeds the POV and the conditioning rules in the system prompt", () => {
+    const { system } = buildPrompt(input, "POV-FRAMEWORK-CONTENTS");
     expect(system).toContain("POV-FRAMEWORK-CONTENTS");
     expect(system).toContain("2-3");
+    expect(system).toContain("anchorTheme");
+    expect(system).toContain("howToPlay");
+    expect(system).toContain("coachingNote");
+  });
+
+  it("embeds the labelled inputs and per-theme levels in the user message", () => {
+    const { user } = buildPrompt(input, "POV");
     expect(user).toContain("Legacy modernization");
     expect(user).toContain("Delivery");
+    expect(user).toContain("Forward-thinking");
     expect(user).toContain("weekly agent-evals");
+    expect(user).toContain("Discovery: Developing");
+    expect(user).toContain("Execution: Advanced");
+    expect(user).toContain("Consulting: Advanced");
   });
 });
 ```
@@ -582,7 +699,16 @@ Expected: FAIL — cannot find module `./analyze`.
 ```ts
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { AnalyzeInput, Briefing, BriefingSchema, ENGAGEMENT_TYPES, PHASES } from "./schema";
+import {
+  AnalyzeInput,
+  Briefing,
+  BriefingSchema,
+  ENGAGEMENT_TYPES,
+  PHASES,
+  POSTURES,
+  COMPETENCY_LEVELS,
+  COMPETENCY_THEMES,
+} from "./schema";
 import { loadPovFramework } from "./pov";
 
 function labelFor(options: readonly { value: string; label: string }[], value: string): string {
@@ -592,6 +718,12 @@ function labelFor(options: readonly { value: string; label: string }[], value: s
 export function buildPrompt(input: AnalyzeInput, pov: string): { system: string; user: string } {
   const engagementLabel = labelFor(ENGAGEMENT_TYPES, input.engagement);
   const phaseLabel = labelFor(PHASES, input.phase);
+  const postureLabel = labelFor(POSTURES, input.posture);
+  const levelLabel = (v: string) => labelFor(COMPETENCY_LEVELS, v);
+
+  const competencyLines = COMPETENCY_THEMES.map(
+    (t) => `- ${t.label}: ${levelLabel(input.competency[t.value as keyof AnalyzeInput["competency"]])}`,
+  ).join("\n");
 
   const system = [
     "You are breezemerchant — Valtech's internal antidote to PM hype ('breeze merchants').",
@@ -600,8 +732,8 @@ export function buildPrompt(input: AnalyzeInput, pov: string): { system: string;
     "to LinkedIn-style platitudes.",
     "",
     "Below is Valtech's authored POV framework. It has two halves: a 'today' competency baseline",
-    "and a set of future-vector shift dimensions. Map the client's REAL signals onto this model.",
-    "Do not invent the framework — use the one provided.",
+    "(four themes: Vision & strategy, Discovery, Execution, Consulting) and a set of future-vector",
+    "shift dimensions. Map the client's REAL signals onto this model. Do not invent the framework.",
     "",
     "=== POV FRAMEWORK ===",
     pov,
@@ -609,18 +741,33 @@ export function buildPrompt(input: AnalyzeInput, pov: string): { system: string;
     "",
     "Rules for the briefing:",
     "- Surface ONLY the 2-3 shift dimensions that matter most for the given engagement type and phase.",
-    "- For each, quote or paraphrase the client's real text as the signal; name the hype to discount;",
-    "  anchor to the relevant 'today' competency; give one mindset move and one concrete skill move,",
-    "  framed for the specific phase.",
-    "- The breezemerchantRead is a short, honest meta-summary of where this client is real vs noise.",
+    "- For each dimension set `anchorTheme` to the single competency theme it most evolves from",
+    "  (vision | discovery | execution | consulting).",
+    "- `signal`: quote or paraphrase the client's real text. `hypeToDiscount`: the breeze-merchant",
+    "  version and why it doesn't apply here. `baselineCompetency`: the relevant 'today' competency.",
+    "- `howToPlay`: tune to the client's POSTURE. Conservative → push quietly, let results not labels",
+    "  make the case, avoid over-evangelising AI. Pragmatic → pair every bold move with a number or",
+    "  guardrail. Forward-thinking → lead with the boldest version; under-reaching is the risk.",
+    "- `mindsetMove` + `skillMove`: framed for the PHASE. Tune the skill move's DEPTH to the PM's level",
+    "  on THIS dimension's anchorTheme — developing → scaffold the habit (smaller first step, more",
+    "  support); proficient → apply the practice directly; advanced → stretch toward leading/owning it.",
+    "- `coachingNote`: if the PM's CONSULTING level is 'advanced', add a concrete 'coach the client team'",
+    "  action for this dimension (modelling & coaching is the Consulting competency). If 'developing',",
+    "  set it to a short 'build this in yourself before you coach it' note. If 'proficient', use null.",
+    "- `breezemerchantRead`: a short, honest meta-summary of where this client is real vs noise,",
+    "  with its closing stance tuned to the posture.",
     "- Be concrete. No platitudes.",
   ].join("\n");
 
   const user = [
     `Engagement type: ${engagementLabel}`,
     `Project phase: ${phaseLabel}`,
+    `Client posture toward builders / AI-PMs: ${postureLabel}`,
     "",
-    "Client context (extracted from a live page):",
+    "The PM's current Valtech competency levels:",
+    competencyLines,
+    "",
+    "Client context (extracted from a live page, or pasted):",
     '"""',
     input.text,
     '"""',
@@ -690,14 +837,21 @@ const engagementValues = ENGAGEMENT_TYPES.map((o) => o.value);
 const phaseValues = PHASES.map((o) => o.value);
 
 export async function POST(req: Request) {
-  let body: { url?: string; text?: string; engagement?: string; phase?: string };
+  let body: {
+    url?: string;
+    text?: string;
+    engagement?: string;
+    phase?: string;
+    posture?: string;
+    competency?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "bad-input" }, { status: 400 });
   }
 
-  const { url, text, engagement, phase } = body;
+  const { url, text, engagement, phase, posture, competency } = body;
   if (
     !engagement ||
     !phase ||
@@ -726,7 +880,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: msg === "too-thin" ? "too-thin" : "fetch-failed" }, { status });
   }
 
-  const parsed = AnalyzeInputSchema.safeParse({ text: clientText, engagement, phase });
+  const parsed = AnalyzeInputSchema.safeParse({
+    text: clientText,
+    engagement,
+    phase,
+    posture,
+    competency,
+  });
   if (!parsed.success) {
     return NextResponse.json({ error: "bad-input" }, { status: 400 });
   }
@@ -763,8 +923,24 @@ git commit -m "feat: add /api/analyze route with fetch + paste fallback"
 - Create: `app/components/types.ts`
 
 **Interfaces:**
-- Consumes: `Briefing` type from `lib/schema.ts`; `ENGAGEMENT_TYPES`, `PHASES` from `lib/schema.ts`; `POST /api/analyze`.
+- Consumes: `Briefing` type from `lib/schema.ts`; `ENGAGEMENT_TYPES`, `PHASES`, `POSTURES`, `COMPETENCY_LEVELS`, `COMPETENCY_THEMES`, `Competency` from `lib/schema.ts`; `POST /api/analyze`.
 - Produces: a single-screen flow — form → loading → briefing, with an inline error state and a paste-the-text fallback.
+
+**Canonical layout & styling:** [`prototype/discovery-briefing.html`](../../../prototype/discovery-briefing.html)
+is the reference for markup and classes — it already uses `valtech.css` + `breezemerchant.css`
+(loaded in Task 1). Port its `bm-*` class structure into these React components rather than
+inventing new styles. The code blocks below are functional scaffolding (state, fields, fetch,
+render); use the prototype's classes for the actual look. The form must collect **five** inputs:
+URL (+ paste fallback), engagement, phase, posture, and the four competency levels. The briefing
+view must render each dimension's `anchorTheme`, `signal`, `hypeToDiscount`, `howToPlay`,
+`baselineCompetency`, `mindsetMove`, `skillMove`, and `coachingNote` (when non-null), plus the
+header (`clientName`, `oneLineRead`) and footer (`breezemerchantRead`).
+
+> ⚠️ The inline `var(--panel)`, `var(--line)`, `var(--ink)`, `var(--accent)`, `var(--bg)`,
+> `var(--muted)` in the scaffolding below are leftovers from an earlier theme and are **not
+> defined** by the Valtech stylesheets. Replace them with `bm-*` classes from the prototype
+> (or, as a quick map: `--panel`→`--vt-white`, `--line`→`--vt-rule`, `--ink`→`--vt-fg`,
+> `--accent`→`--vt-accent`, `--bg`→`--vt-paper`, `--muted`→`--vt-fg-soft`).
 
 - [ ] **Step 1: Create `app/components/types.ts`**
 
@@ -793,11 +969,13 @@ export function BriefingView({ briefing }: { briefing: Briefing }) {
           style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: 16 }}
         >
           <h3 style={{ marginTop: 0 }}>{d.name}</h3>
-          <Field label="The signal" value={d.signal} />
+          <Field label={`Anchors to ${d.anchorTheme}`} value={d.signal} />
           <Field label="Hype to discount" value={d.hypeToDiscount} />
+          <Field label="How to play it" value={d.howToPlay} />
           <Field label="Your baseline (today)" value={d.baselineCompetency} />
           <Field label="Mindset move" value={d.mindsetMove} />
           <Field label="Skill move" value={d.skillMove} />
+          {d.coachingNote && <Field label="Coaching layer" value={d.coachingNote} />}
         </article>
       ))}
 
@@ -828,9 +1006,15 @@ function Field({ label, value }: { label: string; value: string }) {
 "use client";
 
 import { useState } from "react";
-import { ENGAGEMENT_TYPES, PHASES } from "@/lib/schema";
+import {
+  ENGAGEMENT_TYPES,
+  PHASES,
+  POSTURES,
+  COMPETENCY_LEVELS,
+  COMPETENCY_THEMES,
+} from "@/lib/schema";
 import type { AnalyzeResponse } from "./types";
-import type { Briefing } from "@/lib/schema";
+import type { Briefing, Competency } from "@/lib/schema";
 
 const ERROR_COPY: Record<string, string> = {
   "fetch-failed": "Couldn't read that page — paste the text in below instead.",
@@ -844,6 +1028,13 @@ export function InputForm({ onBriefing }: { onBriefing: (b: Briefing) => void })
   const [text, setText] = useState("");
   const [engagement, setEngagement] = useState(ENGAGEMENT_TYPES[0].value);
   const [phase, setPhase] = useState(PHASES[0].value);
+  const [posture, setPosture] = useState(POSTURES[1].value); // default: pragmatic
+  const [competency, setCompetency] = useState<Competency>({
+    vision: "proficient",
+    discovery: "proficient",
+    execution: "proficient",
+    consulting: "proficient",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPaste, setShowPaste] = useState(false);
@@ -856,7 +1047,7 @@ export function InputForm({ onBriefing }: { onBriefing: (b: Briefing) => void })
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, text, engagement, phase }),
+        body: JSON.stringify({ url, text, engagement, phase, posture, competency }),
       });
       const data: AnalyzeResponse = await res.json();
       if ("briefing" in data) {
@@ -905,6 +1096,37 @@ export function InputForm({ onBriefing }: { onBriefing: (b: Briefing) => void })
           </select>
         </label>
       </div>
+
+      <label style={{ display: "grid", gap: 6 }}>
+        <span>Client posture toward builders / AI-PMs</span>
+        <select style={field} value={posture} onChange={(e) => setPosture(e.target.value)}>
+          {POSTURES.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </label>
+
+      <fieldset style={{ border: "0.5px solid var(--vt-rule)", borderRadius: 0, padding: 12, margin: 0 }}>
+        <legend style={{ fontSize: 13 }}>Your level (vs. the Valtech competency themes)</legend>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {COMPETENCY_THEMES.map((t) => (
+            <label key={t.value} style={{ display: "grid", gap: 6 }}>
+              <span>{t.label}</span>
+              <select
+                style={field}
+                value={competency[t.value as keyof Competency]}
+                onChange={(e) =>
+                  setCompetency((c) => ({ ...c, [t.value]: e.target.value as Competency[keyof Competency] }))
+                }
+              >
+                {COMPETENCY_LEVELS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       {(showPaste || text) && (
         <label style={{ display: "grid", gap: 6 }}>
@@ -1012,8 +1234,8 @@ Expected: server on `http://localhost:3000`.
 
 - [ ] **Step 3: Run the golden path (live fetch)**
 
-In the browser: paste a known, pre-tested public job-posting URL, choose an engagement type and phase, and submit.
-Expected: a loading state, then a briefing with a client name, a one-line read, 2–3 dimensions (each with signal / hype / baseline / mindset move / skill move), and a breezemerchant read.
+In the browser: paste a known, pre-tested public job-posting URL, choose an engagement type, phase, client posture, and your four competency levels, then submit.
+Expected: a loading state, then a briefing with a client name, a one-line read, 2–3 dimensions (each with anchor theme / signal / hype / how-to-play / baseline / mindset move / skill move, plus a coaching layer when Consulting is Advanced), and a breezemerchant read. Re-run with the posture and competency levels changed and confirm the moves visibly adapt.
 
 - [ ] **Step 4: Run the paste fallback**
 
@@ -1041,13 +1263,15 @@ git commit -m "docs: add golden-path manual verification script"
 ## Self-Review
 
 **Spec coverage:**
-- §1 What it is / §3 Inputs → Tasks 6 & 7 (URL + engagement + phase, paste fallback).
-- §2 Authored model → Task 4 (POV loader); the file already exists and includes the competency baseline.
-- §4 Output briefing (header, 2–3 dimensions, mindset + skill, footer read) → Task 2 (schema) + Task 5 (prompt) + Task 7 (view).
-- §5 Architecture (Next.js, server-side key, one structured call) → Tasks 1, 5, 6.
+- §1 What it is / §3 Inputs (URL + engagement + phase + posture + per-theme competency, paste fallback) → Tasks 2, 6, 7.
+- §2 Authored model → Task 4 (POV loader); the file already exists and includes the four-theme competency baseline.
+- §4 Output briefing (header, 2–3 dimensions with anchor theme + how-to-play + coaching layer, mindset + skill, footer read) → Task 2 (schema) + Task 5 (prompt) + Task 7 (view).
+- §5 Architecture (Next.js, server-side key, one structured call, Valtech styling via valtech.css + breezemerchant.css) → Tasks 1, 5, 6.
 - §6 Error handling (fetch fail → paste fallback, too-thin, analysis failure, loading state) → Tasks 3, 6, 7.
 - §7 Testing (schema validation, extraction smoke test, golden-path manual) → Tasks 2, 3, 8.
-- §8 Deferred decisions now resolved: engagement/phase option lists (Global Constraints + Task 2), briefing schema (Task 2), extraction library (`@mozilla/readability` + `jsdom`, Task 3).
+- §8 Deferred decisions now resolved: all option lists incl. posture + competency levels (Global Constraints + Task 2); per-theme competency granularity; Valtech styling; briefing schema (Task 2); extraction library `@mozilla/readability` + `jsdom` (Task 3).
+
+**Conditioning logic (posture + competency):** posture drives `howToPlay` and the closing read (Task 5 system rules); each dimension's `anchorTheme` selects which competency rating tunes its `skillMove` depth; `consulting` drives the `coachingNote` overlay. All conditioning lives in the prompt (Task 5) — the schema (Task 2) just carries the fields, and the view (Task 7) renders them.
 
 **Placeholder scan:** No TBDs. Every code step shows complete code; every command shows expected output.
 

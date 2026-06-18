@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>breezemerchant — briefing</title>
+<link rel="stylesheet" href="../valtech.css" />
+<link rel="stylesheet" href="../breezemerchant.css" />
+</head>
+<body>
+<div class="bm-wrap">
+
+  <div class="bm-brand"><span class="dot"></span><b>breezemerchant</b><span>· pre-engagement briefing</span></div>
+
+  <div class="bm-panel">
+    <h2>Calibrate the briefing</h2>
+    <p class="bm-sub">Couldn't read the page live? Tell us how the client thinks, and rate yourself against the Valtech competency themes — the moves adapt to both.</p>
+
+    <div class="bm-ctl-grid">
+      <div class="bm-ctl" style="grid-column:1 / -1;">
+        <span class="bm-eyebrow">Client's posture toward "builders" / AI&nbsp;PMs</span>
+        <div class="bm-seg" id="seg-posture">
+          <button data-v="conservative">Conservative</button>
+          <button data-v="pragmatic" class="on">Pragmatic</button>
+          <button data-v="forward">Forward-thinking</button>
+        </div>
+      </div>
+
+      <div class="bm-ctl">
+        <span class="bm-eyebrow">Vision &amp; strategy <span class="hint">— your level</span></span>
+        <div class="bm-seg" data-theme="vision">
+          <button data-v="developing">Developing</button>
+          <button data-v="proficient" class="on">Proficient</button>
+          <button data-v="advanced">Advanced</button>
+        </div>
+      </div>
+      <div class="bm-ctl">
+        <span class="bm-eyebrow">Discovery <span class="hint">— your level</span></span>
+        <div class="bm-seg" data-theme="discovery">
+          <button data-v="developing">Developing</button>
+          <button data-v="proficient" class="on">Proficient</button>
+          <button data-v="advanced">Advanced</button>
+        </div>
+      </div>
+      <div class="bm-ctl">
+        <span class="bm-eyebrow">Execution <span class="hint">— your level</span></span>
+        <div class="bm-seg" data-theme="execution">
+          <button data-v="developing">Developing</button>
+          <button data-v="proficient" class="on">Proficient</button>
+          <button data-v="advanced">Advanced</button>
+        </div>
+      </div>
+      <div class="bm-ctl">
+        <span class="bm-eyebrow">Consulting <span class="hint">— your level</span></span>
+        <div class="bm-seg" data-theme="consulting">
+          <button data-v="developing">Developing</button>
+          <button data-v="proficient" class="on">Proficient</button>
+          <button data-v="advanced">Advanced</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bm-calib" id="calib"></div>
+  </div>
+
+  <div class="bm-panel">
+    <div class="bm-chips">
+      <span class="bm-chip">Legacy modernization</span>
+      <span class="bm-chip bm-chip--phase">Discovery phase</span>
+      <span class="bm-chip" id="chip-posture">Pragmatic client</span>
+    </div>
+    <div class="bm-client">Acme Retail</div>
+    <p class="bm-read">A real modernization appetite — but they're framing it as a migration plan. Your job in discovery is to turn it into a set of bets.</p>
+  </div>
+
+  <div class="bm-seclabel"><span class="bm-eyebrow">Where to focus</span><span class="rule"></span></div>
+
+  <div id="dims"></div>
+
+  <div class="bm-footer">
+    <h3>The breezemerchant read</h3>
+    <p id="footer-read"></p>
+  </div>
+
+  <p class="bm-note">Prototype · mocked briefing for Acme Retail (Legacy modernization · Discovery). The live version generates this from a fetched URL, then calibrates with your posture and per-theme competency inputs.</p>
+
+</div>
+
+<script>
+(function(){
+  var state = {
+    posture: "pragmatic",
+    levels: { vision: "proficient", discovery: "proficient", execution: "proficient", consulting: "proficient" }
+  };
+
+  var postureLabel = { conservative: "Conservative", pragmatic: "Pragmatic", forward: "Forward-thinking" };
+  var levelLabel = { developing: "Developing", proficient: "Proficient", advanced: "Advanced" };
+  var themeLabel = { vision: "Vision & strategy", discovery: "Discovery", execution: "Execution", consulting: "Consulting" };
+
+  var postureStance = {
+    conservative: "push the mindset quietly — let results, not labels, make the case for the builder approach.",
+    pragmatic: "meet them in the middle — pair every bold move with a number they trust or a guardrail.",
+    forward: "lead with the boldest version — they reward ambition over caution."
+  };
+
+  var footerByPosture = {
+    conservative: "Acme genuinely wants to modernize, but they're cautious about the “builder” label — so don't lead with it. Mine their data, demonstrate value quietly, and let the results earn you permission to push further. The thing to resist is over-evangelising AI before you've built trust; the thing to do is be unmistakably useful first.",
+    pragmatic: "Acme genuinely wants to modernize and is open to learning by building — that's real, and it's your leverage. Pair every bold move with a number or a guardrail so it lands. The one thing to quietly resist is the gravity toward a fixed 12-month migration plan: it feels responsible but de-risks nothing. Mine their data, frame the first move as a falsifiable bet, build a probe that turns assumption into evidence.",
+    forward: "Acme wants to modernize and explicitly rewards ambition — so don't hold back. Frame the whole thing as a bet portfolio, build openly, and invite them to build alongside you. The blur between PM and maker is exactly what they're hiring for. The only trap here is under-reaching: a cautious, sprint-shaped discovery would waste a client who's ready to move fast."
+  };
+
+  var dims = [
+    {
+      title: "Discovery → Sensing", anchor: "discovery",
+      old: "Interview-led, quarterly insight", neu: "Continuous signal from the system you already have",
+      signal: "“15 years of order and support history we've never properly mined.” A legacy estate is a goldmine of behavioural data — discovery here isn't greenfield interviews, it's mining what's already there.",
+      hype: "“We'll do a discovery sprint.” A two-week interview sprint is the old playbook. The differentiated move is instrumenting the legacy system and reading it continuously.",
+      baseline: ["Using quantitative data", "Using qualitative data"],
+      play: {
+        conservative: "Lead with their own data, not with “AI”. Frame it as “we read your support logs”, not “we ran an LLM” — the method earns trust, the label spooks them.",
+        pragmatic: "Name the AI assist, but anchor it to a number they care about — “this digest cut triage time, here's the before / after”.",
+        forward: "Go straight to a live, re-runnable digest and offer to wire it into their tooling. They'll reward the ambition."
+      },
+      mindset: {
+        claim: "Treat the legacy system as your richest research participant.",
+        why: "In a modernization, the strongest evidence isn't what stakeholders say they want — it's what 15 years of real usage already proves. The team that reads the system out-discovers the team running fresh interviews.",
+        good: "You can point to three behaviours in the existing data that contradict a stated assumption — before you've run a single interview.",
+        trap: "mistaking “we talked to ten users” for evidence when the system already shows you ten thousand."
+      },
+      skill: {
+        claim: "Stand up an AI-assisted signal digest from their existing logs.",
+        first: {
+          developing: "Get read access to one source and ask an LLM to summarise the top recurring themes from the last 90 days. Even a one-off summary is a strong first artefact while you build the habit.",
+          proficient: "Cluster the last 90 days of one source into recurring themes and bring the top five to kickoff.",
+          advanced: "Stand up a re-runnable weekly digest and design it to survive past your engagement."
+        },
+        good: "A repeatable digest the team can re-run weekly, not a one-off slide. Discovery becomes a standing instrument, not an event."
+      },
+      coach: "run a working session that hands the digest method to their team to own."
+    },
+    {
+      title: "Roadmaps → Bets", anchor: "vision",
+      old: "A 12-month migration plan", neu: "A sequence of falsifiable bets",
+      signal: "“We need a phased plan to retire the monolith over the next year.” There's genuine commitment and budget — the appetite is real and the constraint is concrete.",
+      hype: "“Phased plan” framed as a fixed Gantt chart. A year-long migration defended as a plan is the old roadmap in modern clothing.",
+      baseline: ["Product strategy", "Defining success metrics", "Roadmapping"],
+      play: {
+        conservative: "Don't say “bets” out loud — say “a phased plan with checkpoints”. Same discipline, language they trust.",
+        pragmatic: "Introduce one explicit kill condition on phase one. A single falsifiable bet shifts the conversation without alarming anyone.",
+        forward: "Frame the whole modernization as a portfolio of bets from day one — they'll engage with the rigour."
+      },
+      mindset: {
+        claim: "Discovery's output is the riskiest assumption, not the plan.",
+        why: "Modernizations fail by committing to a 12-month sequence before testing whether the first slice even works. Your value is reframing “what's the plan?” into “what's the one thing that, if wrong, sinks this?”",
+        good: "The client leaves discovery able to name the bet they're making first, the evidence that would kill it, and what they'd do instead.",
+        trap: "producing a beautiful phased roadmap nobody can falsify — it feels like progress and de-risks nothing."
+      },
+      skill: {
+        claim: "Write the first slice as a one-page bet, not a workstream.",
+        first: {
+          developing: "Take phase one and write down just two things: the hypothesis, and the signal that would prove it wrong. That alone reframes the conversation.",
+          proficient: "Rewrite phase one as: hypothesis → smallest test → kill / scale signal → the decision each outcome triggers.",
+          advanced: "Reframe the whole phased plan as a bet portfolio sequenced by risk, with explicit kill conditions on each."
+        },
+        good: "A bet the team could start next week and learn from within a fortnight — sized to collapse the cost of being wrong."
+      },
+      coach: "facilitate the client through writing their own bets, rather than handing them yours."
+    },
+    {
+      title: "Spec → Build", anchor: "execution",
+      old: "Document the requirements, hand off", neu: "Prototype to learn, against the real system",
+      signal: "“Open to rapid prototyping to de-risk technical unknowns.” They explicitly want to learn by building — rare and valuable in a modernization.",
+      hype: "“PM should be technical.” As a hiring slogan it means little — but here it's backed by openness to prototyping, so treat it as a genuine invitation.",
+      baseline: ["Experimentation", "Ideation", "Articulating requirements"],
+      play: {
+        conservative: "Keep the probe internal and low-key; demo the learning, not the code. A “PM who builds” can read as overstepping here.",
+        pragmatic: "Show the probe as a de-risking tool, not a PM flex — “I built this to check the seam before we commit budget”.",
+        forward: "Build it openly and invite them to build alongside you — the blur between PM and maker is the point, and they want it."
+      },
+      mindset: {
+        claim: "In discovery, a throwaway probe beats a polished spec.",
+        why: "The unknowns in a legacy modernization are technical as much as user-facing. A two-day probe against the real system surfaces integration realities a requirements doc would hide until delivery — when they're expensive.",
+        good: "You've built something disposable that answers a real “can we even…?” question, and you're comfortable throwing it away.",
+        trap: "letting the prototype become the thing you defend — discovery probes are meant to be killed, not shipped."
+      },
+      skill: {
+        claim: "Build a thin vertical probe against one real integration point.",
+        first: {
+          developing: "Pair with an engineer to build a minimal slice touching the scariest integration — spec and steer it, building your confidence to do it solo next time.",
+          proficient: "With AI tooling, build a minimal end-to-end slice that touches the scariest integration yourself.",
+          advanced: "Build the probe solo and use it to set the team's prototyping bar for the engagement."
+        },
+        good: "A working sketch you can demo in the discovery readout that turns “we assume this is possible” into “we've seen it work.”"
+      },
+      coach: "walk their team through how you built the probe so the capability stays after you leave."
+    }
+  ];
+
+  function renderDims(){
+    var consult = state.levels.consulting;
+    var out = "";
+    dims.forEach(function(d, i){
+      var lvl = state.levels[d.anchor];
+      var coachHtml = "";
+      if (consult === "advanced") {
+        coachHtml = '<div class="bm-coach"><b>Coach it (Consulting: Advanced)</b> — ' + d.coach + '</div>';
+      } else if (consult === "developing") {
+        coachHtml = '<div class="bm-coach" style="border-left-color:var(--vt-rule);"><b style="color:var(--vt-fg-soft);">Do it first (Consulting: Developing)</b> — build this competency in yourself before you coach the client team on it.</div>';
+      }
+
+      out += '<div class="bm-dim">'
+        + '<div class="bm-dim__n">Dimension ' + (i+1) + ' of 3 · anchors to ' + themeLabel[d.anchor] + '</div>'
+        + '<div class="bm-dim__title">' + d.title + '</div>'
+        + '<div class="bm-dim__shift"><span>' + d.old + '</span><span class="arrow">→</span><span class="new">' + d.neu + '</span></div>'
+        + '<div class="bm-pair">'
+        + '<div class="bm-call bm-call--signal"><span class="lab">The signal — real</span><p>' + d.signal + '</p></div>'
+        + '<div class="bm-call bm-call--hype"><span class="lab">Hype to discount</span><p>' + d.hype + '</p></div>'
+        + '</div>'
+        + '<div class="bm-play"><span class="lab">How to play it — ' + postureLabel[state.posture].toLowerCase() + ' client</span><p>' + d.play[state.posture] + '</p></div>'
+        + '<p class="bm-baseline">Evolves from your today-baseline: ' + d.baseline.map(function(b){ return '<span class="bm-tag">' + b + '</span>'; }).join(' ') + '</p>'
+        + '<div class="bm-moves">'
+        + '<div class="bm-move bm-move--mindset"><span class="bm-kind">Mindset move</span>'
+        + '<div class="bm-move__claim">' + d.mindset.claim + '</div><dl>'
+        + '<div><dt>Why it matters</dt><dd class="muted">' + d.mindset.why + '</dd></div>'
+        + '<div><dt>What good looks like</dt><dd>' + d.mindset.good + '</dd></div>'
+        + '</dl><p class="bm-trap"><b>The trap:</b> ' + d.mindset.trap + '</p></div>'
+        + '<div class="bm-move bm-move--skill"><span class="bm-kind">Skill move</span>'
+        + '<div class="bm-move__claim">' + d.skill.claim + '</div><dl>'
+        + '<div><dt>Your first step this week</dt><dd>' + d.skill.first[lvl] + '<span class="bm-lvltag">tuned: ' + themeLabel[d.anchor] + ' · ' + levelLabel[lvl] + '</span></dd></div>'
+        + '<div><dt>What good looks like</dt><dd class="muted">' + d.skill.good + '</dd></div>'
+        + '</dl>' + coachHtml + '</div>'
+        + '</div></div>';
+    });
+    document.getElementById("dims").innerHTML = out;
+  }
+
+  function strongestWeakest(){
+    var order = { developing: 0, proficient: 1, advanced: 2 };
+    var keys = Object.keys(state.levels);
+    var hi = keys[0], lo = keys[0];
+    keys.forEach(function(k){
+      if (order[state.levels[k]] > order[state.levels[hi]]) hi = k;
+      if (order[state.levels[k]] < order[state.levels[lo]]) lo = k;
+    });
+    return { hi: hi, lo: lo, same: state.levels[hi] === state.levels[lo] };
+  }
+
+  function render(){
+    renderDims();
+    var sw = strongestWeakest();
+    var tuneNote = sw.same
+      ? "Moves are pitched at applying the practice directly across all four themes."
+      : "Moves stretch where you're strongest (" + themeLabel[sw.hi] + ") and scaffold where you're still developing (" + themeLabel[sw.lo] + ").";
+    var consultNote = state.levels.consulting === "advanced"
+      ? " Because you rated Consulting highly, each move adds a coach-the-client layer."
+      : (state.levels.consulting === "developing" ? " With Consulting still developing, the focus is on doing before coaching." : "");
+
+    document.getElementById("calib").innerHTML =
+      'Calibrated for a <b>' + postureLabel[state.posture] + '</b> client — ' + postureStance[state.posture]
+      + ' ' + tuneNote + consultNote;
+    document.getElementById("chip-posture").textContent = postureLabel[state.posture] + " client";
+    document.getElementById("footer-read").textContent = footerByPosture[state.posture];
+  }
+
+  document.getElementById("seg-posture").addEventListener("click", function(e){
+    var btn = e.target.closest("button"); if (!btn) return;
+    state.posture = btn.getAttribute("data-v");
+    Array.prototype.forEach.call(this.querySelectorAll("button"), function(b){ b.classList.toggle("on", b === btn); });
+    render();
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".bm-seg[data-theme]"), function(seg){
+    seg.addEventListener("click", function(e){
+      var btn = e.target.closest("button"); if (!btn) return;
+      state.levels[seg.getAttribute("data-theme")] = btn.getAttribute("data-v");
+      Array.prototype.forEach.call(seg.querySelectorAll("button"), function(b){ b.classList.toggle("on", b === btn); });
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
