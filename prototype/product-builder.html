@@ -17,12 +17,11 @@ const { useState, useEffect, useMemo } = React;
 
 /*
   PRODUCT BUILDER — a working tool for Valtech PMs (breezemerchant project).
-  Merged build: the work-moment + two-options + skill-reps model, wearing the
-  Valtech identity (valtech.css tokens + brand fonts). AI generation falls back
-  to grounded canned content when the API is unreachable (always, in this offline prototype).
+  In-flow companion: Trigger → Frame → Move → Track. Valtech-skinned.
+  Offline prototype: AI generation falls back to grounded canned content;
+  the real build routes generation server-side.
 */
 
-// ---------- Product Builder model (drives "The AI-native approach") ----------
 const BUILDER = {
   1: { tier: 1, short: "Problem & customer insight", line: "Find real, valuable problems grounded in evidence about users." },
   2: { tier: 1, short: "Strategic prioritisation", line: "Decide what to do and what to refuse, tied to outcomes." },
@@ -41,7 +40,6 @@ const builderId = (label) => {
   return e ? Number(e[0]) : 9;
 };
 
-// ---------- Valtech framework excerpt (drives "What most PMs do", by level) ----------
 const VALTECH = {
   "Hypothesis and assumption identification": {
     theme: "Discovery",
@@ -95,7 +93,6 @@ const VALTECH = {
   },
 };
 
-// ---------- triggers (entry points) ----------
 const TRIGGERS = [
   {
     id: "brief", title: "A new brief landed", sub: "Fresh client work just hit your desk.",
@@ -107,6 +104,8 @@ const TRIGGERS = [
     prompt: "Here is a client brief: [paste]. Identify the single riskiest unproven assumption, then give me a step-by-step plan to prototype only that assumption in under a day.",
     timebox: "Half a day",
     skip: "This client expects a clear written plan before anything is built. Lead with the one-pager, name the risk in writing, and prototype once you have agreement.",
+    scenario: "A mid-market insurer wants a 'customer portal refresh'. The brief is two pages, light on outcomes and heavy on features, and mentions 'AI-powered' twice without saying what for.",
+    scenAppetite: "pragmatic", scenPhase: "discovery",
   },
   {
     id: "discovery", title: "Kicking off discovery", sub: "Starting to work out what's really needed.",
@@ -118,6 +117,8 @@ const TRIGGERS = [
     prompt: "Here are our existing research inputs: [paste]. Cluster them into candidate problem themes. For each, rate how strong the evidence is and what you would verify with a real user.",
     timebox: "One afternoon",
     skip: "If this client measures discovery rigour in fieldwork hours, run the standard process and use AI in the background. Do not present AI synthesis as the headline.",
+    scenario: "A retail bank is six weeks into a savings-app rebuild. There are 40 user interviews already done but never synthesised, plus 18 months of app-store reviews nobody has read.",
+    scenAppetite: "pragmatic", scenPhase: "discovery",
   },
   {
     id: "aifeature", title: "Scoping an AI feature", sub: "Something model-driven is on the roadmap.",
@@ -129,6 +130,8 @@ const TRIGGERS = [
     prompt: "We are building [feature] using an LLM. Help me draft an evaluation set: 10 representative inputs including edge and adversarial cases, each with a clear pass or fail standard for the output.",
     timebox: "1 to 2 hours",
     skip: "If this is only a proof of concept for a board demo, a full eval set is premature. Build the demo, but document the quality work production would require.",
+    scenario: "A logistics client wants an 'AI assistant' in their dispatcher tool to suggest route changes. No one has defined what a good vs bad suggestion looks like, and the dispatchers are sceptical.",
+    scenAppetite: "conservative", scenPhase: "definition",
   },
   {
     id: "stuck", title: "Stuck on a problem", sub: "Spinning on something and need a way through.",
@@ -140,6 +143,8 @@ const TRIGGERS = [
     prompt: "I am stuck on this: [describe]. I have already tried [X]. Give me three different ways to frame this problem, and for each, the strongest objection to it.",
     timebox: "1 hour",
     skip: null,
+    scenario: "You've been asked to cut a roadmap from nine months to five without dropping the headline feature, and every option you've drafted just moves the pain somewhere else.",
+    scenAppetite: "pragmatic", scenPhase: "delivery",
   },
   {
     id: "update", title: "Prepping a client update", sub: "Pulling together what to tell the client.",
@@ -151,6 +156,8 @@ const TRIGGERS = [
     prompt: "Here are my raw project notes for this week: [paste]. Draft a concise client status update covering progress, next steps, and risks. Leave a clear gap for my recommendation.",
     timebox: "20 minutes",
     skip: "This client reads updates closely and values a personal tone. Use AI to draft, but make the final judgement and wording visibly yours.",
+    scenario: "It's Thursday, the steering committee is tomorrow, and you have three Slack threads, a metrics dashboard, and a delivery risk you haven't told them about yet.",
+    scenAppetite: "ambitious", scenPhase: "delivery",
   },
 ];
 const triggerById = (id) => TRIGGERS.find((t) => t.id === id);
@@ -162,7 +169,6 @@ const APPETITE = [
   ["ambitious", "Ambitious", "Actively wants to push how things are done."],
 ];
 
-// ---------- skill maths ----------
 const REPS_PER_LEVEL = 3;
 const LEVEL_NAME = ["Aware", "Practising", "Proficient", "Leading"];
 const skillLevel = (reps) => Math.min(4, Math.floor(reps / REPS_PER_LEVEL));
@@ -173,7 +179,6 @@ function skillLabel(reps) {
   return `Level ${l} · ${LEVEL_NAME[l - 1]}`;
 }
 
-// ---------- indicative user ----------
 const NOMI_SEED = {
   name: "Nomi",
   role: "Product Manager",
@@ -181,10 +186,10 @@ const NOMI_SEED = {
   weeksActive: 3,
   skills: { 4: 4, 5: 2, 6: 7, 7: 0, 8: 0, 9: 3 },
   activity: [
-    { build: 6, trigger: "brief", taken: true, when: "2 weeks ago" },
-    { build: 4, trigger: "discovery", taken: true, when: "9 days ago" },
-    { build: 9, trigger: "stuck", taken: true, when: "5 days ago" },
-    { build: 6, trigger: "brief", taken: false, when: "4 days ago" },
+    { build: 6, trigger: "brief", taken: true, training: false, when: "2 weeks ago" },
+    { build: 4, trigger: "discovery", taken: true, training: false, when: "9 days ago" },
+    { build: 9, trigger: "stuck", taken: true, training: true, when: "5 days ago" },
+    { build: 6, trigger: "brief", taken: false, training: false, when: "4 days ago" },
   ],
 };
 
@@ -193,7 +198,6 @@ function recommendSkill(skills) {
   return [...COLLECTIBLE].sort((a, b) => (skills[a] - skills[b]) || (order.indexOf(a) - order.indexOf(b)))[0];
 }
 
-// ---------- AI plumbing (real build routes this server-side; offline → canned fallback) ----------
 async function callClaude(system, content) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -206,35 +210,48 @@ async function callClaude(system, content) {
 
 // ================= APP =================
 function App() {
-  const [tab, setTab] = useState("work");
+  const [tab, setTab] = useState("work"); // work | skills | history
+  const [homeNonce, setHomeNonce] = useState(0);
   const [nomi, setNomi] = useState(NOMI_SEED);
-  const [openTrigger, setOpenTrigger] = useState(null);
+  const [launch, setLaunch] = useState(null); // { id, training }
 
   const addRep = (bid) => setNomi((n) => ({ ...n, skills: { ...n.skills, [bid]: (n.skills[bid] || 0) + 1 } }));
   const logActivity = (entry) => setNomi((n) => ({ ...n, activity: [{ ...entry, when: "just now" }, ...n.activity] }));
   const setLevel = (lvl) => setNomi((n) => ({ ...n, level: lvl }));
 
-  function startTrigger(id) { setOpenTrigger(id); setTab("work"); }
+  const goHome = () => { setTab("work"); setHomeNonce((k) => k + 1); };
+  const startTrigger = (id) => { setLaunch({ id, training: false }); setTab("work"); };
+  const startTraining = (id) => { setLaunch({ id, training: true }); setTab("work"); };
 
   return (
     <div className="root">
       <Style />
       <header className="topbar">
-        <div className="brand"><span className="dot" /> PRODUCT BUILDER</div>
+        <button className="brand" onClick={goHome} title="Back to work moments">
+          <span className="dot" /> Product Builder
+        </button>
         <div className="who">
-          <span className="who-name">{nomi.name}</span>
-          <span className="who-meta">Product Manager · Framework level {nomi.level}</span>
+          <span className="who-name">{nomi.name} · Product Manager</span>
+          <label className="who-level">
+            Framework level
+            <select value={nomi.level} onChange={(e) => setLevel(Number(e.target.value))}>
+              {[1, 2, 3, 4, 5].map((l) => <option key={l} value={l}>Level {l}</option>)}
+            </select>
+          </label>
         </div>
         <nav>
-          <button className={tab === "work" ? "on" : ""} onClick={() => setTab("work")}>Work</button>
           <button className={tab === "skills" ? "on" : ""} onClick={() => setTab("skills")}>Skills</button>
+          <button className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>History</button>
         </nav>
       </header>
 
-      {tab === "work"
-        ? <Work nomi={nomi} addRep={addRep} logActivity={logActivity} setLevel={setLevel}
-            openTrigger={openTrigger} clearOpen={() => setOpenTrigger(null)} goSkills={() => setTab("skills")} />
-        : <Skills nomi={nomi} startTrigger={startTrigger} />}
+      {tab === "work" && (
+        <Work nomi={nomi} addRep={addRep} logActivity={logActivity} homeNonce={homeNonce}
+          launch={launch} clearLaunch={() => setLaunch(null)} goSkills={() => setTab("skills")}
+          startTraining={startTraining} />
+      )}
+      {tab === "skills" && <Skills nomi={nomi} startTrigger={startTrigger} startTraining={startTraining} goHistory={() => setTab("history")} />}
+      {tab === "history" && <History nomi={nomi} />}
 
       <footer className="foot">Prototype · Valtech Product Competency Framework 2024 + Product Builder model v0.1</footer>
     </div>
@@ -242,20 +259,65 @@ function App() {
 }
 
 // ---------- WORK ----------
-function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goSkills }) {
+function Work({ nomi, addRep, logActivity, homeNonce, launch, clearLaunch, goSkills, startTraining }) {
   const [view, setView] = useState("home");
   const [trigger, setTrigger] = useState(null);
   const [ctx, setCtx] = useState({ appetite: "pragmatic", phase: "discovery", situation: "" });
+  const [training, setTraining] = useState(false);
+  const [fileNote, setFileNote] = useState("");
   const [result, setResult] = useState(null);
   const [fb, setFb] = useState(false);
   const [shownLevel, setShownLevel] = useState(nomi.level);
 
+  useEffect(() => { setView("home"); setTrigger(null); setResult(null); }, [homeNonce]);
+
   useEffect(() => {
-    if (openTrigger) { setTrigger(openTrigger); setView("setup"); clearOpen(); }
-  }, [openTrigger]);
+    if (!launch) return;
+    const t = triggerById(launch.id);
+    setTrigger(launch.id);
+    setTraining(!!launch.training);
+    if (launch.training && t) {
+      setCtx({ appetite: t.scenAppetite || "pragmatic", phase: t.scenPhase || "discovery", situation: t.scenario || "" });
+    } else {
+      setCtx({ appetite: "pragmatic", phase: "discovery", situation: "" });
+    }
+    setFileNote("");
+    setView("setup");
+    clearLaunch();
+  }, [launch]);
 
   const recId = useMemo(() => recommendSkill(nomi.skills), [nomi.skills]);
   const recTrigger = triggerById(builderToTrigger[recId]);
+
+  function beginTrigger(id) {
+    setTrigger(id); setTraining(false); setFileNote("");
+    setCtx({ appetite: "pragmatic", phase: "discovery", situation: "" });
+    setView("setup");
+  }
+  function beginTraining() {
+    const id = builderToTrigger[recId];
+    const t = triggerById(id);
+    setTrigger(id); setTraining(true); setFileNote("");
+    setCtx({ appetite: t.scenAppetite || "pragmatic", phase: t.scenPhase || "discovery", situation: t.scenario || "" });
+    setView("setup");
+  }
+
+  function onFile(e) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const isText = /\.(txt|md|csv|json)$/i.test(f.name);
+    if (isText) {
+      const r = new FileReader();
+      r.onload = () => {
+        const txt = String(r.result || "").slice(0, 6000);
+        setCtx((c) => ({ ...c, situation: (c.situation ? c.situation + "\n\n" : "") + "[" + f.name + "]\n" + txt }));
+        setFileNote("Loaded " + f.name + " into the situation.");
+      };
+      r.readAsText(f);
+    } else {
+      setFileNote(f.name + " attached. PDF / Word parsing runs server-side in the real build — for the prototype, add a one-line gist above.");
+    }
+  }
 
   async function generate() {
     setView("gen");
@@ -271,7 +333,7 @@ function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goS
       "If the builder move would not serve THIS client given their appetite, set verdict to 'skip-it' and give the honest alternative. " +
       "Return ONLY JSON: {\"traditional\":string,\"builder\":string,\"competency\":string (one of: " + COLLECTIBLE.map((i) => BUILDER[i].short).join(", ") + "),\"verdict\":\"do-it\"|\"skip-it\",\"whyClientValues\":string,\"skip\":string|null,\"steps\":[3 short strings],\"prompt\":string,\"timebox\":string}. Keep fields tight.";
     const content =
-      `Trigger: ${t.title}\nClient appetite: ${ctx.appetite}\nDelivery phase: ${ctx.phase}\nSituation: ${ctx.situation || "(not specified)"}\n` +
+      `Trigger: ${t.title}\nMode: ${training ? "training scenario (off-client practice)" : "real client work"}\nClient appetite: ${ctx.appetite}\nDelivery phase: ${ctx.phase}\nSituation: ${ctx.situation || "(not specified)"}\n` +
       `Relevant Valtech competency: ${t.trad} (${v.theme}). At level ${nomi.level}: ${v.levels[nomi.level - 1]}\n` +
       `Target builder skill: ${b.short}. ${b.line}`;
     try {
@@ -292,15 +354,23 @@ function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goS
   }
 
   function log(taken) {
-    const t = triggerById(trigger);
     const bid = builderId(result.competency);
     if (taken) addRep(bid);
-    logActivity({ build: bid, trigger, taken });
-    setView("home"); setTrigger(null); setResult(null);
+    logActivity({
+      build: bid, trigger, taken, training,
+      ctx: { ...ctx }, shownLevel,
+      result: {
+        traditional: result.traditional, builder: result.builder, verdict: result.verdict,
+        whyClientValues: result.whyClientValues, steps: result.steps, prompt: result.prompt,
+        timebox: result.timebox, skip: result.skip, competency: result.competency,
+      },
+    });
+    setView("home"); setTrigger(null); setResult(null); setTraining(false);
     setCtx({ appetite: "pragmatic", phase: "discovery", situation: "" });
     goSkills();
   }
 
+  // ----- home -----
   if (view === "home")
     return (
       <main className="stage">
@@ -309,13 +379,23 @@ function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goS
         <p className="lede">For each one, you'll see what most PMs do and the AI-native alternative, with the steps to do it. Choosing the AI-native option builds the matching skill.</p>
         <div className="triggers">
           {TRIGGERS.map((t) => (
-            <button key={t.id} className="trig" onClick={() => { setTrigger(t.id); setView("setup"); }}>
+            <button key={t.id} className="trig" onClick={() => beginTrigger(t.id)}>
               <span className="trig-title">{t.title}</span>
               <span className="trig-sub">{t.sub}</span>
               <span className="trig-arrow">→</span>
             </button>
           ))}
         </div>
+
+        <div className="train" onClick={beginTraining}>
+          <div>
+            <span className="train-l">Practise off-client</span>
+            <p className="train-name">Generate a training scenario</p>
+            <p className="train-why">A realistic, made-up situation for {BUILDER[recId].short.toLowerCase()} — your least-developed skill. Rehearse the move before it's in front of a client.</p>
+          </div>
+          <span className="train-go">Generate →</span>
+        </div>
+
         <div className="rec" onClick={goSkills}>
           <span className="rec-l">Recommended next</span>
           Your least-developed AI skill is {BUILDER[recId].short.toLowerCase()}.
@@ -324,13 +404,16 @@ function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goS
       </main>
     );
 
+  // ----- setup -----
   if (view === "setup") {
     const t = triggerById(trigger);
     return (
       <main className="stage">
         <button className="back" onClick={() => setView("home")}>← all moments</button>
-        <p className="eyebrow">{t.title}</p>
+        <p className="eyebrow">{t.title}{training && <span className="train-tag">Training scenario</span>}</p>
         <h2 className="h2">Some context, so the options fit the situation.</h2>
+
+        {training && <p className="train-banner">Off-client practice. You're rehearsing <b>{BUILDER[t.build].short}</b> against a realistic scenario — taking the move logs a practice rep.</p>}
 
         <p className="label">How does this client feel about new ways of working?</p>
         <div className="choices three">
@@ -348,17 +431,27 @@ function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goS
           ))}
         </div>
 
-        <p className="label">What's the situation? <span className="opt">optional, makes the options sharper</span></p>
+        <p className="label">What's the situation? <span className="opt">a line is plenty, or attach a document below</span></p>
         <textarea className="ta" placeholder="e.g. retail client, brief is vague about what 'AI-powered search' should do" value={ctx.situation} onChange={(e) => setCtx({ ...ctx, situation: e.target.value })} />
+
+        <div className="upload">
+          <label className="upload-btn">
+            <input type="file" accept=".txt,.md,.csv,.json,.pdf,.docx,.doc" onChange={onFile} />
+            Attach an RFP, SOW, or brief
+          </label>
+          {fileNote && <span className="upload-note">{fileNote}</span>}
+        </div>
 
         <button className="primary" onClick={generate}>Show the two options</button>
       </main>
     );
   }
 
+  // ----- generating -----
   if (view === "gen")
     return <main className="stage center"><div className="spinner" /><p className="eyebrow">One moment</p><h2 className="h2">Putting together the two options for this situation.</h2></main>;
 
+  // ----- result -----
   const t = triggerById(trigger);
   const v = VALTECH[t.trad];
   const skip = result.verdict === "skip-it";
@@ -369,6 +462,7 @@ function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goS
   return (
     <main className="stage wide">
       <button className="back" onClick={() => setView("setup")}>← change context</button>
+      {training && <p className="train-banner">Training scenario · practising {b.short}.</p>}
       {fb && <p className="fb">Offline mode: showing the built-in options (live AI generation runs server-side in the real build).</p>}
 
       {skip && (
@@ -403,7 +497,7 @@ function Work({ nomi, addRep, logActivity, setLevel, openTrigger, clearOpen, goS
           <div className="src">
             <span className="src-l">Product Builder model · {TIER_NAME[b.tier]}</span>
             <span className="src-name">{b.short}</span>
-            <p className="skill-now">Your level here: <b>{skillLabel(reps)}</b>{!skip && <span className="skill-gain"> · taking this adds a rep</span>}</p>
+            <p className="skill-now">Your level here: <b>{skillLabel(reps)}</b>{!skip && <span className="skill-gain"> · taking this adds a {training ? "practice " : ""}rep</span>}</p>
           </div>
         </div>
       </div>
@@ -461,11 +555,10 @@ function Ring({ reps, accent }) {
   );
 }
 
-function Skills({ nomi, startTrigger }) {
+function Skills({ nomi, startTrigger, startTraining, goHistory }) {
   const recId = recommendSkill(nomi.skills);
   const recTrigger = triggerById(builderToTrigger[recId]);
   const started = COLLECTIBLE.filter((id) => (nomi.skills[id] || 0) > 0).length;
-  const accentFor = () => "var(--builder)";
 
   const SkillCard = ({ id }) => {
     const s = BUILDER[id];
@@ -473,7 +566,7 @@ function Skills({ nomi, startTrigger }) {
     const isRec = id === recId;
     return (
       <div className={`skill ${reps > 0 ? "begun" : ""} ${isRec ? "rec-skill" : ""}`}>
-        <Ring reps={reps} accent={accentFor()} />
+        <Ring reps={reps} accent="var(--builder)" />
         <div className="skill-body">
           <span className="skill-name">{s.short}{isRec && <span className="rec-pip">next</span>}</span>
           <span className="skill-line">{s.line}</span>
@@ -483,6 +576,8 @@ function Skills({ nomi, startTrigger }) {
     );
   };
 
+  const taken = nomi.activity.filter((a) => a.taken).length;
+
   return (
     <main className="stage wide">
       <p className="eyebrow">Skills</p>
@@ -491,17 +586,27 @@ function Skills({ nomi, startTrigger }) {
 
       <div className="profile">
         <div className="prof-stat"><span className="ps-n">{started}/{COLLECTIBLE.length}</span><span className="ps-l">skills started</span></div>
-        <div className="prof-stat"><span className="ps-n">{nomi.activity.filter((a) => a.taken).length}</span><span className="ps-l">moves taken</span></div>
+        <div className="prof-stat"><span className="ps-n">{taken}</span><span className="ps-l">moves taken</span></div>
         <div className="prof-stat"><span className="ps-n">{nomi.weeksActive}</span><span className="ps-l">weeks active</span></div>
       </div>
 
-      <div className="next" onClick={() => recTrigger && startTrigger(recTrigger.id)}>
-        <div>
-          <span className="next-l">Build next</span>
-          <p className="next-name">{BUILDER[recId].short}</p>
-          <p className="next-why">Your least-developed skill. {recTrigger ? `Start from "${recTrigger.title}".` : ""}</p>
+      <div className="next-row">
+        <div className="next" onClick={() => recTrigger && startTrigger(recTrigger.id)}>
+          <div>
+            <span className="next-l">Build next · on real work</span>
+            <p className="next-name">{BUILDER[recId].short}</p>
+            <p className="next-why">{recTrigger ? `Start from "${recTrigger.title}".` : "Your least-developed skill."}</p>
+          </div>
+          <span className="next-go">Start →</span>
         </div>
-        <span className="next-go">Start →</span>
+        <div className="next ghost-next" onClick={() => recTrigger && startTraining(recTrigger.id)}>
+          <div>
+            <span className="next-l">Or practise off-client</span>
+            <p className="next-name">Training scenario</p>
+            <p className="next-why">Rehearse the same skill against a realistic made-up situation.</p>
+          </div>
+          <span className="next-go">Generate →</span>
+        </div>
       </div>
 
       <p className="unit-h">Shifted practices</p>
@@ -515,18 +620,55 @@ function Skills({ nomi, startTrigger }) {
         {[1, 2, 3].map((id) => <span key={id} className="found-chip">{BUILDER[id].short}</span>)}
       </div>
 
-      <p className="unit-h">Recent activity</p>
-      <div className="log">
-        {nomi.activity.map((a, i) => {
+      <div className="see-history" onClick={goHistory}>See your full move history →</div>
+    </main>
+  );
+}
+
+// ---------- HISTORY ----------
+function History({ nomi }) {
+  const list = nomi.activity;
+  return (
+    <main className="stage wide">
+      <p className="eyebrow">History</p>
+      <h1 className="h1">Every move, and the advice at the time</h1>
+      <p className="lede">A record of the moments you brought here, what the tool advised, and whether you took it. Open any entry to see the two options exactly as they were.</p>
+
+      <div className="hlist">
+        {list.map((a, i) => {
           const t = triggerById(a.trigger);
+          const b = BUILDER[a.build];
+          const hasDetail = !!a.result;
           return (
-            <div key={i} className="logrow">
-              <span className={`logdot ${a.taken ? "ok" : "skip"}`} />
-              <span className="log-when">{a.when}</span>
-              <span className="log-trig">{t ? t.title : a.trigger}</span>
-              <span className="log-comp">{BUILDER[a.build].short}</span>
-              <span className={`log-status ${a.taken ? "ok" : "skip"}`}>{a.taken ? "took it" : "skipped"}</span>
-            </div>
+            <details key={i} className="hentry" open={i === 0 && hasDetail}>
+              <summary>
+                <span className={`logdot ${a.taken ? "ok" : "skip"}`} />
+                <span className="h-when">{a.when}</span>
+                <span className="h-trig">{t ? t.title : a.trigger}</span>
+                <span className="h-tags">
+                  {a.training && <span className="h-tag training">practice</span>}
+                  <span className="h-tag comp">{b.short}</span>
+                  <span className={`h-tag status ${a.taken ? "ok" : "skip"}`}>{a.taken ? "took it" : "skipped"}</span>
+                </span>
+              </summary>
+              {hasDetail ? (
+                <div className="hbody">
+                  {a.ctx && <p className="h-ctx"><b>Context:</b> {a.ctx.appetite} client · {a.ctx.phase} phase{a.ctx.situation ? ` — ${a.ctx.situation.slice(0, 180)}` : ""}</p>}
+                  {a.result.verdict === "skip-it" && <p className="h-skip">Verdict at the time: not worth it for this client. {a.result.skip}</p>}
+                  <div className="h-fork">
+                    <div className="h-opt"><span className="h-opt-l">What most PMs do</span><p>{a.result.traditional}</p></div>
+                    <div className="h-opt builder"><span className="h-opt-l">The AI-native approach</span><p>{a.result.builder}</p></div>
+                  </div>
+                  {a.result.whyClientValues && <p className="h-why"><b>Why for the client:</b> {a.result.whyClientValues}</p>}
+                  {a.result.steps && a.result.verdict !== "skip-it" && (
+                    <ol className="h-steps">{a.result.steps.map((s, j) => <li key={j}>{s}</li>)}</ol>
+                  )}
+                  {a.result.prompt && a.result.verdict !== "skip-it" && <code className="h-prompt">{a.result.prompt}</code>}
+                </div>
+              ) : (
+                <div className="hbody"><p className="h-nodetail">This move predates advice capture — only the outcome was recorded.</p></div>
+              )}
+            </details>
           );
         })}
       </div>
@@ -537,26 +679,26 @@ function Skills({ nomi, startTrigger }) {
 function Style() {
   return (
     <style>{`
-    /* Valtech identity: tokens + fonts come from valtech.css. This maps the
-       prototype's variables onto the Valtech design system. */
     :root{
       --ink:var(--vt-ink); --paper:var(--vt-paper); --card:var(--vt-white);
       --line:var(--vt-sage-mid); --mut:var(--vt-graphite);
       --builder:var(--vt-coral); --builder-soft:#FCE7E2;
       --old:var(--vt-slate); --skip:var(--vt-berry); --good:var(--vt-forest);
-      --mono:var(--vt-body); --sans:var(--vt-body); --head:var(--vt-head);
+      --sans:var(--vt-body); --head:var(--vt-head);
     }
     *{box-sizing:border-box}
     .root{background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased}
     button{font-family:var(--sans);cursor:pointer;border:none;background:none;color:inherit}
-    textarea{font-family:var(--sans)}
+    textarea,select{font-family:var(--sans)}
 
-    .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 26px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-    .brand{font-family:var(--head);font-weight:300;letter-spacing:.14em;font-size:15px;display:flex;align-items:center;gap:9px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 26px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+    .brand{font-family:var(--head);font-weight:300;letter-spacing:.12em;font-size:16px;display:flex;align-items:center;gap:9px;padding:0}
+    .brand:hover{color:var(--builder)}
     .brand .dot{width:9px;height:9px;background:var(--builder);border-radius:50%}
-    .who{display:flex;flex-direction:column;line-height:1.2;margin-left:auto;margin-right:8px;text-align:right}
+    .who{display:flex;flex-direction:column;gap:4px;line-height:1.2;margin-left:auto;margin-right:8px;text-align:right;align-items:flex-end}
     .who-name{font-weight:500;font-size:13px}
-    .who-meta{font-size:10px;color:var(--mut);letter-spacing:.04em;text-transform:uppercase}
+    .who-level{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:6px}
+    .who-level select{font-family:var(--sans);font-size:12px;text-transform:none;letter-spacing:0;color:var(--ink);background:var(--card);border:1px solid var(--line);padding:3px 6px}
     .topbar nav{display:flex;gap:4px}
     .topbar nav button{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;padding:7px 13px;border:1px solid transparent;color:var(--mut)}
     .topbar nav button.on{color:var(--ink);border-color:var(--ink)}
@@ -565,11 +707,12 @@ function Style() {
     .stage.wide{max-width:820px}
     .stage.center{text-align:center;padding-top:120px}
 
-    .eyebrow{font-weight:600;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--builder);margin:0 0 16px}
+    .eyebrow{font-weight:600;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--builder);margin:0 0 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .eyebrow.nm{margin:0}
+    .train-tag{font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:var(--vt-lime);padding:3px 8px}
     .hero{font-family:var(--head);font-size:clamp(30px,5vw,44px);font-weight:300;line-height:1.05;letter-spacing:-.01em;margin:0 0 18px}
     .h1{font-family:var(--head);font-size:clamp(26px,4.5vw,36px);font-weight:300;letter-spacing:-.01em;line-height:1.08;margin:0 0 14px}
-    .h2{font-family:var(--head);font-size:24px;font-weight:400;letter-spacing:0;margin:0 0 22px}
+    .h2{font-family:var(--head);font-size:24px;font-weight:400;margin:0 0 22px}
     .lede{font-size:16px;color:var(--mut);max-width:60ch;margin:0 0 28px}
 
     .back{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);margin-bottom:22px;padding:0}
@@ -583,7 +726,14 @@ function Style() {
     .trig-arrow{position:absolute;right:20px;top:50%;transform:translateY(-50%);color:var(--builder);font-size:18px;opacity:0;transition:opacity .12s}
     .trig:hover .trig-arrow{opacity:1}
 
-    .rec{margin-top:28px;border:1px solid var(--line);border-left:3px solid var(--builder);padding:14px 18px;font-size:14px;color:var(--ink);cursor:pointer;background:var(--card)}
+    .train{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px dashed var(--builder);background:var(--builder-soft);padding:16px 20px;cursor:pointer;margin-top:18px}
+    .train-l{font-weight:600;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--builder)}
+    .train-name{font-family:var(--head);font-weight:400;font-size:19px;margin:5px 0 3px}
+    .train-why{margin:0;font-size:13px;color:var(--ink)}
+    .train-go{font-size:13px;color:var(--builder);white-space:nowrap;font-weight:500}
+    .train-banner{background:#F3F7E8;border:1px solid #CFE0A0;padding:12px 16px;font-size:13.5px;color:var(--ink);margin:0 0 22px}
+
+    .rec{margin-top:18px;border:1px solid var(--line);border-left:3px solid var(--builder);padding:14px 18px;font-size:14px;color:var(--ink);cursor:pointer;background:var(--card)}
     .rec-l{display:block;font-weight:600;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--builder);margin-bottom:6px}
 
     .label{font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:26px 0 12px}
@@ -600,9 +750,15 @@ function Style() {
     .seg button:last-child{border-right:none}
     .seg button.on{background:var(--ink);color:var(--paper)}
 
-    .ta{width:100%;min-height:78px;border:1px solid var(--line);padding:12px 14px;font-size:14.5px;background:var(--card);color:var(--ink);resize:vertical;margin-bottom:6px}
+    .ta{width:100%;min-height:78px;border:1px solid var(--line);padding:12px 14px;font-size:14.5px;background:var(--card);color:var(--ink);resize:vertical;margin-bottom:10px}
     .ta:focus{outline:none;border-color:var(--builder)}
     .ta::placeholder{color:var(--vt-sage-mid)}
+
+    .upload{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    .upload-btn{font-size:12px;letter-spacing:.04em;text-transform:uppercase;font-weight:600;color:var(--mut);border:1px dashed var(--line);padding:9px 14px;cursor:pointer}
+    .upload-btn:hover{border-color:var(--builder);color:var(--builder)}
+    .upload-btn input{display:none}
+    .upload-note{font-size:12.5px;color:var(--mut);font-style:italic}
 
     .primary{background:var(--ink);color:var(--paper);font-weight:500;font-size:15px;padding:13px 26px;transition:transform .08s;margin-top:28px}
     .primary:hover{transform:translateY(-1px)}
@@ -662,10 +818,12 @@ function Style() {
     .ps-n{font-family:var(--head);font-size:28px;font-weight:300}
     .ps-l{font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
 
-    .next{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--builder);background:var(--builder-soft);padding:16px 20px;cursor:pointer;margin-bottom:32px}
+    .next-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:32px}
+    .next{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--builder);background:var(--builder-soft);padding:16px 20px;cursor:pointer}
+    .next.ghost-next{background:var(--card);border-style:dashed}
     .next-l{font-weight:600;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--builder)}
-    .next-name{font-family:var(--head);font-weight:400;font-size:20px;margin:5px 0 3px}
-    .next-why{margin:0;font-size:13.5px;color:var(--ink)}
+    .next-name{font-family:var(--head);font-weight:400;font-size:18px;margin:5px 0 3px}
+    .next-why{margin:0;font-size:13px;color:var(--ink)}
     .next-go{font-size:13px;color:var(--builder);white-space:nowrap;font-weight:500}
 
     .unit-h{font-weight:600;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);border-top:1px solid var(--line);padding-top:14px;margin:34px 0 14px}
@@ -685,15 +843,37 @@ function Style() {
     .found{display:flex;flex-wrap:wrap;gap:8px}
     .found-chip{font-size:11.5px;color:var(--mut);border:1px dashed var(--line);padding:7px 11px}
 
-    .log{display:flex;flex-direction:column}
-    .logrow{display:grid;grid-template-columns:14px 90px 1fr auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:13.5px}
-    .logdot{width:9px;height:9px;border-radius:50%}
+    .see-history{margin-top:32px;border-top:1px solid var(--line);padding-top:18px;font-size:13px;font-weight:500;color:var(--builder);cursor:pointer}
+
+    /* history */
+    .hlist{display:flex;flex-direction:column;gap:8px}
+    .hentry{border:1px solid var(--line);background:var(--card)}
+    .hentry summary{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;list-style:none;flex-wrap:wrap}
+    .hentry summary::-webkit-details-marker{display:none}
+    .logdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
     .logdot.ok{background:var(--good)} .logdot.skip{background:var(--line);border:1px solid var(--mut)}
-    .log-when{font-size:11px;color:var(--mut)}
-    .log-trig{font-weight:500}
-    .log-comp{font-size:11px;color:var(--mut)}
-    .log-status{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
-    .log-status.ok{color:var(--good)} .log-status.skip{color:var(--mut)}
+    .h-when{font-size:11px;color:var(--mut);min-width:78px}
+    .h-trig{font-weight:500;font-size:14.5px;flex:1;min-width:140px}
+    .h-tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .h-tag{font-size:10px;letter-spacing:.05em;text-transform:uppercase;font-weight:600;padding:3px 8px;border:1px solid var(--line);color:var(--mut)}
+    .h-tag.training{background:var(--vt-lime);color:var(--ink);border-color:var(--vt-lime)}
+    .h-tag.comp{color:var(--ink)}
+    .h-tag.status.ok{color:var(--good);border-color:var(--good)}
+    .h-tag.status.skip{color:var(--mut)}
+    .hbody{padding:0 18px 18px;border-top:1px solid var(--line);margin-top:-1px}
+    .h-ctx{font-size:13px;color:var(--mut);margin:14px 0}
+    .h-skip{font-size:13.5px;color:var(--skip);background:#FBEFD9;border:1px solid #E3CE9B;padding:10px 13px;margin:0 0 14px}
+    .h-fork{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+    .h-opt{border:1px solid var(--line);padding:12px 14px}
+    .h-opt.builder{border-color:var(--builder)}
+    .h-opt-l{display:block;font-weight:600;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:5px}
+    .h-opt.builder .h-opt-l{color:var(--builder)}
+    .h-opt p{margin:0;font-size:13px}
+    .h-why{font-size:13px;color:var(--mut);margin:0 0 12px}
+    .h-steps{margin:0 0 12px;padding-left:18px;font-size:13px}
+    .h-steps li{margin-bottom:5px}
+    .h-prompt{display:block;background:var(--ink);color:#dfe1e4;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.55;padding:12px;white-space:pre-wrap}
+    .h-nodetail{font-size:13px;color:var(--mut);font-style:italic;margin:14px 0 0}
 
     .foot{text-align:center;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);padding:24px;border-top:1px solid var(--line)}
 
@@ -703,9 +883,9 @@ function Style() {
       .fork{grid-template-columns:1fr}
       .fork-arrow{transform:rotate(90deg);padding:6px 0}
       .profile{grid-template-columns:1fr 1fr}
+      .next-row{grid-template-columns:1fr}
       .skill-grid{grid-template-columns:1fr}
-      .logrow{grid-template-columns:14px 1fr auto;row-gap:4px}
-      .log-comp,.log-when{grid-column:2/4}
+      .h-fork{grid-template-columns:1fr}
       .stage{padding:32px 18px 64px}
     }
     `}</style>
