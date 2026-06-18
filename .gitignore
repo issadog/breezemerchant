@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Node / Next.js (for the eventual app build)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local env / secrets
+.env.local
+.env*.local
