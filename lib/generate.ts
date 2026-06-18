@@ -52,16 +52,16 @@ export async function generateFrame(input: GenerateInput): Promise<Frame> {
     const client = new Anthropic();
     const { system, user } = buildPrompt(input, t, VALTECH[t.trad], BUILDER[t.build]);
     const res = await client.beta.messages.parse({
-      model: "claude-opus-4-5" as string,
+      model: "claude-opus-4-8" as string,
       max_tokens: 16000,
-      thinking: { type: "enabled", budget_tokens: 8000 } as Parameters<typeof client.beta.messages.parse>[0]["thinking"],
+      thinking: { type: "adaptive" } as any,
       output_format: betaZodOutputFormat(FrameSchema),
       system,
       messages: [{ role: "user", content: user }],
       betas: ["output-128k-2025-02-19"],
     });
-    if (!res.parsed) throw new Error("no-output");
-    return res.parsed as Frame;
+    if (!res.parsed_output) throw new Error("no-output");
+    return res.parsed_output as Frame;
   } catch {
     return fallbackFrame(t, input.appetite);
   }
