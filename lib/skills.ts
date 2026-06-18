@@ -1,6 +1,6 @@
 export const REPS_PER_LEVEL = 3;
 
-export const LEVEL_NAME = ["Unaware", "Aware", "Competent", "Proficient", "Master"];
+export const LEVEL_NAME = ["Aware", "Practising", "Proficient", "Leading"];
 
 export function skillLevel(reps: number): number {
   const level = Math.floor(reps / REPS_PER_LEVEL);
@@ -15,10 +15,9 @@ export function skillProgress(reps: number): number {
 }
 
 export function skillLabel(reps: number): string {
-  if (reps === 0) return "Not started";
-  if (reps < REPS_PER_LEVEL) return "Started";
-  const level = skillLevel(reps);
-  return `Level ${level}`;
+  const l = skillLevel(reps);
+  if (l === 0) return reps > 0 ? "Started" : "Not started";
+  return `Level ${l} · ${LEVEL_NAME[l - 1]}`;
 }
 
 export function recommendSkill(skills: Record<number, number>): number {
