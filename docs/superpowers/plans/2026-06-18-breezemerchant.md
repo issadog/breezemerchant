@@ -2,6 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Handoff note (read this first)
+
+You're picking this up cold — the design conversation lived in another session, so the
+"why" is in the spec, not in your head. Skim the companion docs before starting:
+
+- **Spec (the why):** [`docs/superpowers/specs/2026-06-18-breezemerchant-design.md`](../specs/2026-06-18-breezemerchant-design.md)
+- **The authored POV framework (the product's brain):** [`docs/pov/pm-role-shift-framework.md`](../../pov/pm-role-shift-framework.md)
+
+**Recommended approach:** kick this off with `superpowers:subagent-driven-development`
+(fresh subagent per task + a review checkpoint after each one). It catches any
+misread of the spec at the task it happens rather than letting it compound — which
+matters most when you didn't write the plan.
+
+**Prerequisite — API key:** Tasks 1–7 build and unit-test with **no** API key.
+Only the live Claude call (`lib/analyze.ts`) and the Task 8 golden-path demo need a
+real `ANTHROPIC_API_KEY` in `.env.local` (copy `.env.local.example`). Don't get
+blocked at the finish line — have a key ready before Task 8.
+
 **Goal:** A Valtech-internal web app where a PM enters a live client-context URL plus engagement type and project phase, and gets a structured briefing — grounded in an authored PM role-shift framework — on where to focus their mindset and skills to show up as a Product Builder at that client.
 
 **Architecture:** Single Next.js (App Router) app. One client form posts to one API route. The route fetches the URL server-side, extracts readable text, then makes one structured Claude call that maps the real signals onto the authored POV framework (loaded from a markdown file at request time). The validated JSON briefing renders into a focused, sectioned view. No chat; structured in, structured out.
