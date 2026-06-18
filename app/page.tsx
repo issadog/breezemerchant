@@ -1,1 +1,5 @@
-export default function Page(){ return <main style={{padding:32}}>Product Builder</main>; }
+import { App } from "./components/App";
+
+export default function Page() {
+  return <App />;
+}
