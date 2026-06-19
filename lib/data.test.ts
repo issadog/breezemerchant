@@ -38,4 +38,14 @@ describe("domain data integrity", () => {
   it("builderId resolves a short name back to its id", () => {
     expect(builderId(BUILDER[8].short)).toBe(8);
   });
+
+  it("every trigger has a phaseLens with non-empty discovery/definition/delivery", () => {
+    for (const t of TRIGGERS) {
+      expect(t.phaseLens).toBeDefined();
+      for (const phase of ["discovery", "definition", "delivery"] as const) {
+        expect(typeof t.phaseLens[phase]).toBe("string");
+        expect(t.phaseLens[phase].length).toBeGreaterThan(0);
+      }
+    }
+  });
 });

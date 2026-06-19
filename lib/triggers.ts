@@ -14,6 +14,7 @@ export type Trigger = {
   scenario: string;
   scenAppetite: string;
   scenPhase: string;
+  phaseLens: { discovery: string; definition: string; delivery: string };
 };
 
 export const TRIGGERS: Trigger[] = [
@@ -40,6 +41,11 @@ export const TRIGGERS: Trigger[] = [
       "A mid-market insurer wants a 'customer portal refresh'. The brief is two pages, light on outcomes and heavy on features, and mentions 'AI-powered' twice without saying what for.",
     scenAppetite: "pragmatic",
     scenPhase: "discovery",
+    phaseLens: {
+      discovery: "You're at the very start — prototype the assumption that most shapes whether this is even the right brief, and bring it as a question that reframes the kickoff.",
+      definition: "The brief is agreed — prototype the assumption that most affects scope, so the definition you write is grounded in something you've already seen work or fail.",
+      delivery: "A brief landing mid-delivery is usually a change request — prototype its impact against the existing build before you let it expand scope.",
+    },
   },
   {
     id: "discovery",
@@ -65,6 +71,11 @@ export const TRIGGERS: Trigger[] = [
       "A retail bank is six weeks into a savings-app rebuild. There are 40 user interviews already done but never synthesised, plus 18 months of app-store reviews nobody has read.",
     scenAppetite: "pragmatic",
     scenPhase: "discovery",
+    phaseLens: {
+      discovery: "This is the heart of the phase — pre-synthesise everything you already have so your first interviews test the weak spots instead of re-covering known ground.",
+      definition: "Discovery is winding down — use the synthesis to pressure-test the problem statement you're about to commit to, surfacing any theme the evidence doesn't actually support.",
+      delivery: "In delivery, run the synthesis over live signals (support tickets, usage) to catch whether what you're building is drifting from the real need.",
+    },
   },
   {
     id: "aifeature",
@@ -90,6 +101,11 @@ export const TRIGGERS: Trigger[] = [
       "A logistics client wants an 'AI assistant' in their dispatcher tool to suggest route changes. No one has defined what a good vs bad suggestion looks like, and the dispatchers are sceptical.",
     scenAppetite: "conservative",
     scenPhase: "definition",
+    phaseLens: {
+      discovery: "Before committing to the feature, define what good vs bad model output looks like — the eval bar is your cheapest way to learn whether this is even feasible.",
+      definition: "Make the eval set the acceptance criteria — scope the feature around the quality bar, not around a list of stories.",
+      delivery: "Wire the eval set into the delivery loop and re-run it on every model or prompt change, so quality is monitored, not assumed.",
+    },
   },
   {
     id: "stuck",
@@ -114,6 +130,11 @@ export const TRIGGERS: Trigger[] = [
       "You've been asked to cut a roadmap from nine months to five without dropping the headline feature, and every option you've drafted just moves the pain somewhere else.",
     scenAppetite: "pragmatic",
     scenPhase: "delivery",
+    phaseLens: {
+      discovery: "Early on, use the reframes to question whether you're even solving the right problem before you invest in any one direction.",
+      definition: "Use the reframes to stress-test the approach you're about to lock in — keep only the framing that survives your real constraints.",
+      delivery: "Mid-delivery you can't restart — use the reframes to find the smallest change that unblocks you without derailing the plan.",
+    },
   },
   {
     id: "update",
@@ -138,6 +159,11 @@ export const TRIGGERS: Trigger[] = [
       "It's Thursday, the steering committee is tomorrow, and you have three Slack threads, a metrics dashboard, and a delivery risk you haven't told them about yet.",
     scenAppetite: "ambitious",
     scenPhase: "delivery",
+    phaseLens: {
+      discovery: "Early updates set expectations — let AI draft the status and spend your time framing what you're still trying to learn and why that's the right use of the phase.",
+      definition: "Use the saved time to make the one scoping recommendation the client needs to approve so delivery can start cleanly.",
+      delivery: "Draft the status from your delivery data and spend the saved time on the decision the client must make now — especially any risk you've been sitting on.",
+    },
   },
 ];
 
