@@ -10,6 +10,7 @@ export const FrameSchema = z.object({
   steps: z.array(z.string()).min(2).max(4),
   prompt: z.string().describe("A copyable prompt with bracketed blanks."),
   timebox: z.string(),
+  phaseNote: z.string().describe("How the AI-native move shifts in the chosen delivery phase."),
 });
 export type Frame = z.infer<typeof FrameSchema>;
 

@@ -23,14 +23,30 @@ describe("buildPrompt", () => {
 
 describe("fallbackFrame", () => {
   it("returns do-it for a pragmatic client", () => {
-    const f = fallbackFrame(t, "pragmatic");
+    const f = fallbackFrame(t, "pragmatic", "discovery");
     expect(f.verdict).toBe("do-it");
     expect(f.competency).toBe(BUILDER[t.build].short);
     expect(f.steps.length).toBeGreaterThanOrEqual(2);
   });
   it("returns skip-it for a conservative client when the trigger has a skip", () => {
-    const f = fallbackFrame(t, "conservative");
+    const f = fallbackFrame(t, "conservative", "discovery");
     expect(f.verdict).toBe("skip-it");
     expect(f.skip).toBeTruthy();
+  });
+  it("fallbackFrame sets phaseNote from the trigger's phaseLens for the chosen phase", () => {
+    const f = fallbackFrame(t, "pragmatic", "delivery");
+    expect(f.phaseNote).toBe(t.phaseLens.delivery);
+  });
+});
+
+describe("buildPrompt phase", () => {
+  it("buildPrompt instructs phase tailoring and includes the phase", () => {
+    const { system, user } = buildPrompt(
+      { trigger: "brief", appetite: "pragmatic", phase: "definition", situation: "", level: 3, training: false },
+      t, VALTECH[t.trad], BUILDER[t.build],
+    );
+    expect(system.toLowerCase()).toContain("phase");
+    expect(system).toContain("phaseNote");
+    expect(user).toContain("definition");
   });
 });

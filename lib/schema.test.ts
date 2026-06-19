@@ -11,6 +11,7 @@ const frame = {
   steps: ["a", "b", "c"],
   prompt: "Here is a brief: [paste]…",
   timebox: "Half a day",
+  phaseNote: "In the delivery phase: wire the eval set into CI.",
 };
 
 describe("schema", () => {
@@ -20,6 +21,10 @@ describe("schema", () => {
   });
   it("rejects an unknown verdict", () => {
     expect(() => FrameSchema.parse({ ...frame, verdict: "maybe" })).toThrow();
+  });
+  it("rejects a frame missing phaseNote", () => {
+    const { phaseNote, ...withoutNote } = frame; // `frame` = the valid fixture
+    expect(() => FrameSchema.parse(withoutNote)).toThrow();
   });
   it("validates generate input and rejects a bad appetite or non-1-5 level", () => {
     const ok = { trigger: "brief", appetite: "pragmatic", phase: "discovery", situation: "", level: 3, training: false };

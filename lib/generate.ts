@@ -15,6 +15,8 @@ export function buildPrompt(
     "Be practical and specific. No buzzwords, no selling, no talk of looking modern. Ground the value in client delivery.",
     "If the builder move would not serve THIS client given their appetite, set verdict to 'skip-it' and give the honest alternative (the reliable traditional move).",
     `The competency field must be one of: ${COLLECTIBLE.map((i) => BUILDER[i].short).join(", ")}.`,
+    "Tailor the move to the delivery phase (discovery, definition, or delivery): the same trigger calls for a different emphasis at each phase.",
+    "Set `phaseNote` to one concrete sentence on how this move shifts in the given delivery phase.",
   ].join("\n");
   const user = [
     `Trigger: ${t.title}`,
@@ -29,7 +31,11 @@ export function buildPrompt(
   return { system, user };
 }
 
-export function fallbackFrame(t: Trigger, appetite: string): Frame {
+export function fallbackFrame(
+  t: Trigger,
+  appetite: string,
+  phase: "discovery" | "definition" | "delivery",
+): Frame {
   const skip = appetite === "conservative" && t.skip;
   return {
     traditional: t.gloss,
@@ -41,6 +47,7 @@ export function fallbackFrame(t: Trigger, appetite: string): Frame {
     steps: t.steps,
     prompt: t.prompt,
     timebox: t.timebox,
+    phaseNote: t.phaseLens[phase],
   };
 }
 
@@ -63,6 +70,6 @@ export async function generateFrame(input: GenerateInput): Promise<Frame> {
     if (!res.parsed_output) throw new Error("no-output");
     return res.parsed_output as Frame;
   } catch {
-    return fallbackFrame(t, input.appetite);
+    return fallbackFrame(t, input.appetite, input.phase);
   }
 }
