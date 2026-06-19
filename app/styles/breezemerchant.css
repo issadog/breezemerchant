@@ -227,6 +227,7 @@ textarea, select { font-family: var(--sans); }
 .src-stmt { margin: 0; font-size: 12.5px; color: var(--mut); line-height: 1.45; }
 .skill-now { margin: 0; font-size: 12.5px; color: var(--ink); }
 .skill-gain { color: var(--builder); }
+.phase-note { margin: 10px 0 0; font-size: 13px; color: var(--builder); border-left: 2px solid var(--builder); padding-left: 10px; }
 .fork-arrow { display: flex; align-items: center; justify-content: center; color: var(--builder); font-size: 20px; }
 
 .why { border-left: 2px solid var(--builder); padding: 4px 0 4px 16px; margin-bottom: 28px; }

@@ -362,6 +362,9 @@ export function Work({
               )}
             </p>
           </div>
+          {!skip && (
+            <p className="phase-note">In the {ctx.phase} phase: {result.phaseNote}</p>
+          )}
         </div>
       </div>
 
