@@ -44,7 +44,7 @@ export const TRIGGERS: Trigger[] = [
     phaseLens: {
       discovery: "You're at the very start — prototype the assumption that most shapes whether this is even the right brief, and bring it as a question that reframes the kickoff.",
       definition: "The brief is agreed — prototype the assumption that most affects scope, so the definition you write is grounded in something you've already seen work or fail.",
-      delivery: "A brief landing mid-delivery is usually a change request — prototype its impact against the existing build before you let it expand scope.",
+      delivery: "A new brief arriving now is usually a change request — prototype its impact against the existing build before you let it expand scope.",
     },
   },
   {
@@ -72,9 +72,9 @@ export const TRIGGERS: Trigger[] = [
     scenAppetite: "pragmatic",
     scenPhase: "discovery",
     phaseLens: {
-      discovery: "This is the heart of the phase — pre-synthesise everything you already have so your first interviews test the weak spots instead of re-covering known ground.",
+      discovery: "Pre-synthesise everything you already have so your first interviews test the weak spots instead of re-covering known ground — that's the core of the work right now.",
       definition: "Discovery is winding down — use the synthesis to pressure-test the problem statement you're about to commit to, surfacing any theme the evidence doesn't actually support.",
-      delivery: "In delivery, run the synthesis over live signals (support tickets, usage) to catch whether what you're building is drifting from the real need.",
+      delivery: "Run the synthesis over live signals — support tickets, usage — to catch whether what you're building is drifting from the real need.",
     },
   },
   {
@@ -104,7 +104,7 @@ export const TRIGGERS: Trigger[] = [
     phaseLens: {
       discovery: "Before committing to the feature, define what good vs bad model output looks like — the eval bar is your cheapest way to learn whether this is even feasible.",
       definition: "Make the eval set the acceptance criteria — scope the feature around the quality bar, not around a list of stories.",
-      delivery: "Wire the eval set into the delivery loop and re-run it on every model or prompt change, so quality is monitored, not assumed.",
+      delivery: "Wire the eval set into your build pipeline and re-run it on every model or prompt change, so quality is monitored, not assumed.",
     },
   },
   {
@@ -133,7 +133,7 @@ export const TRIGGERS: Trigger[] = [
     phaseLens: {
       discovery: "Early on, use the reframes to question whether you're even solving the right problem before you invest in any one direction.",
       definition: "Use the reframes to stress-test the approach you're about to lock in — keep only the framing that survives your real constraints.",
-      delivery: "Mid-delivery you can't restart — use the reframes to find the smallest change that unblocks you without derailing the plan.",
+      delivery: "You can't restart now — use the reframes to find the smallest change that unblocks you without derailing the plan.",
     },
   },
   {
@@ -162,7 +162,7 @@ export const TRIGGERS: Trigger[] = [
     phaseLens: {
       discovery: "Early updates set expectations — let AI draft the status and spend your time framing what you're still trying to learn and why that's the right use of the phase.",
       definition: "Use the saved time to make the one scoping recommendation the client needs to approve so delivery can start cleanly.",
-      delivery: "Draft the status from your delivery data and spend the saved time on the decision the client must make now — especially any risk you've been sitting on.",
+      delivery: "Draft the status from your latest data and spend the saved time on the decision the client must make now — especially any risk you've been sitting on.",
     },
   },
 ];

@@ -34,7 +34,7 @@ export function buildPrompt(
 export function fallbackFrame(
   t: Trigger,
   appetite: string,
-  phase: "discovery" | "definition" | "delivery",
+  phase: GenerateInput["phase"],
 ): Frame {
   const skip = appetite === "conservative" && t.skip;
   return {
